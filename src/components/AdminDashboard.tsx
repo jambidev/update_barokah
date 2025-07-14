@@ -1,1623 +1,448 @@
-import React, { useState } from 'react';
-import { useEffect, useRef } from 'react';
-import Swal from 'sweetalert2';
+import React, { useState, useEffect } from 'react';
 import { 
-  BarChart3, 
   Users, 
-  Calendar, 
+  Package, 
   Settings, 
-  Bell, 
+  BarChart3, 
+  Calendar,
   Search,
-  Filter,
-  Download,
-  Eye,
+  Plus,
   Edit,
   Trash2,
+  Eye,
+  LogOut,
+  Printer,
+  Wrench,
   CheckCircle,
   Clock,
   AlertCircle,
-  Monitor,
-  Laptop,
-  Printer,
-  Wrench,
-  Shield,
-  Zap,
-  LogOut,
-  Plus,
-  Save,
-  X
+  Filter,
+  Download,
+  RefreshCw
 } from 'lucide-react';
-import { getAllBookings } from '../utils/bookingSupabase';
+import { getAllBookings, getBookingById } from '../utils/bookingSupabase';
 import { 
-  fetchTechnicians, 
-  updateBookingStatus, 
-  assignTechnician,
-  fetchPrinterBrands,
-  fetchProblemCategories,
+  fetchPrinterBrands, 
+  fetchProblemCategories, 
+  fetchTechnicians,
   addPrinterBrand,
   addPrinterModel,
+  updatePrinterBrand,
   updatePrinterModel,
+  deletePrinterBrand,
   deletePrinterModel,
   addProblemCategory,
   addProblem,
-  updateProblem,
-  deleteProblem,
-  updatePrinterBrand,
   updateProblemCategory,
+  updateProblem,
+  deleteProblemCategory,
+  deleteProblem,
+  addTechnician,
+  updateTechnician,
   deleteTechnician,
-  deletePrinterBrand,
-  deleteProblemCategory
+  updateBookingStatus,
+  assignTechnician,
+  updateActualCost
 } from '../utils/supabaseData';
-import NotificationSystem from './NotificationSystem';
 import { supabase } from '../utils/supabase';
+import { SweetAlertConfig, showSuccessAlert, showErrorAlert, showDeleteConfirm } from '../utils/sweetAlert';
+import Swal from 'sweetalert2';
 
 interface AdminDashboardProps {
   onNavigate: (page: string) => void;
   onLogout: () => void;
 }
 
-interface TechnicianFormModalProps {
-  technician?: any;
-  onSave: (data: any) => void;
-  onClose: () => void;
-}
-
-interface ScheduleModalProps {
-  technician: any;
-  onClose: () => void;
-}
-
-const ScheduleModal: React.FC<ScheduleModalProps> = ({ technician, onClose }) => {
-  const days = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
-  
-  // Parse schedule string (e.g., "Senin-Jumat 08:00-17:00")
-  const parseSchedule = (scheduleStr: string) => {
-    if (!scheduleStr) return { days: [], time: '' };
-    
-    const parts = scheduleStr.split(' ');
-    const dayRange = parts[0] || '';
-    const timeRange = parts[1] || '';
-    
-    let workingDays: string[] = [];
-    
-    if (dayRange.includes('-')) {
-      const [start, end] = dayRange.split('-');
-      const startIndex = days.indexOf(start);
-      const endIndex = days.indexOf(end);
-      
-      if (startIndex !== -1 && endIndex !== -1) {
-        for (let i = startIndex; i <= endIndex; i++) {
-          workingDays.push(days[i]);
-        }
-      }
-    } else {
-      workingDays = dayRange.split(',').map(d => d.trim());
-    }
-    
-    return { days: workingDays, time: timeRange };
-  };
-  
-  const schedule = parseSchedule(technician?.schedule || '');
-  
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-md w-full">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">
-              Jadwal Kerja - {technician?.name}
-            </h3>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <X className="h-6 w-6" />
-            </button>
-          </div>
-          
-          <div className="space-y-4">
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <h4 className="font-medium text-blue-900 mb-2">Informasi Teknisi</h4>
-              <div className="space-y-1 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-blue-700">Nama:</span>
-                  <span className="font-medium">{technician?.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-blue-700">Telepon:</span>
-                  <span className="font-medium">{technician?.phone}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-blue-700">Status:</span>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    technician?.is_available 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-red-100 text-red-800'
-                  }`}>
-                    {technician?.is_available ? 'Tersedia' : 'Sibuk'}
-                  </span>
-                </div>
-              </div>
-            </div>
-            
-            <div>
-              <h4 className="font-medium text-gray-900 mb-3">Jadwal Kerja Mingguan</h4>
-              <div className="grid grid-cols-7 gap-1 mb-4">
-                {days.map((day) => (
-                  <div
-                    key={day}
-                    className={`text-center p-2 rounded text-xs font-medium ${
-                      schedule.days.includes(day)
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-500'
-                    }`}
-                  >
-                    {day.substring(0, 3)}
-                  </div>
-                ))}
-              </div>
-              
-              {schedule.time && (
-                <div className="bg-gray-50 p-3 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Jam Kerja:</span>
-                    <span className="font-medium text-lg">{schedule.time} WIB</span>
-                  </div>
-                </div>
-              )}
-              
-              <div className="mt-4 text-sm text-gray-600">
-                <p><strong>Jadwal Lengkap:</strong> {technician?.schedule || 'Tidak ada jadwal'}</p>
-              </div>
-            </div>
-            
-            <div className="bg-yellow-50 p-3 rounded-lg">
-              <h5 className="font-medium text-yellow-800 mb-1">Spesialisasi</h5>
-              <div className="flex flex-wrap gap-1">
-                {technician?.specialization?.map((spec: string, index: number) => (
-                  <span
-                    key={index}
-                    className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full"
-                  >
-                    {spec}
-                  </span>
-                )) || <span className="text-yellow-700 text-sm">Tidak ada spesialisasi</span>}
-              </div>
-            </div>
-          </div>
-          
-          <div className="mt-6">
-            <button
-              onClick={onClose}
-              className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700"
-            >
-              Tutup
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const TechnicianFormModal: React.FC<TechnicianFormModalProps> = ({ technician, onSave, onClose }) => {
-  const [formData, setFormData] = useState({
-    name: technician?.name || '',
-    phone: technician?.phone || '',
-    email: technician?.email || '',
-    experience: technician?.experience || '',
-    rating: technician?.rating || '',
-    specialization: technician?.specialization || [],
-    schedule: technician?.schedule || 'Senin-Jumat 08:00-17:00'
-  });
-
-  const [newSpecialization, setNewSpecialization] = useState('');
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const addSpecialization = () => {
-    if (newSpecialization.trim() && !formData.specialization.includes(newSpecialization.trim())) {
-      setFormData(prev => ({
-        ...prev,
-        specialization: [...prev.specialization, newSpecialization.trim()]
-      }));
-      setNewSpecialization('');
-    }
-  };
-
-  const removeSpecialization = (spec: string) => {
-    setFormData(prev => ({
-      ...prev,
-      specialization: prev.specialization.filter(s => s !== spec)
-    }));
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSave(formData);
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">
-              {technician ? 'Edit Teknisi' : 'Tambah Teknisi'}
-            </h3>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <X className="h-6 w-6" />
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nama Lengkap *
-              </label>
-              <input
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nomor Telepon *
-              </label>
-              <input
-                type="tel"
-                name="phone"
-                value={formData.phone}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Pengalaman (tahun) *
-                </label>
-                <input
-                  type="number"
-                  name="experience"
-                  value={formData.experience}
-                  onChange={handleInputChange}
-                  min="0"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Rating (1-5)
-                </label>
-                <input
-                  type="number"
-                  name="rating"
-                  value={formData.rating}
-                  onChange={handleInputChange}
-                  min="1"
-                  max="5"
-                  step="0.1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Spesialisasi
-              </label>
-              <div className="flex space-x-2 mb-2">
-                <input
-                  type="text"
-                  value={newSpecialization}
-                  onChange={(e) => setNewSpecialization(e.target.value)}
-                  placeholder="Tambah spesialisasi"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSpecialization())}
-                />
-                <button
-                  type="button"
-                  onClick={addSpecialization}
-                  className="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700"
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {formData.specialization.map((spec, index) => (
-                  <span
-                    key={index}
-                    className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-sm rounded-full"
-                  >
-                    {spec}
-                    <button
-                      type="button"
-                      onClick={() => removeSpecialization(spec)}
-                      className="ml-1 text-blue-600 hover:text-blue-800"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Jadwal Kerja
-              </label>
-              <input
-                type="text"
-                name="schedule"
-                value={formData.schedule}
-                onChange={handleInputChange}
-                placeholder="Contoh: Senin-Jumat 08:00-17:00"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            <div className="flex space-x-3 pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-              >
-                Batal
-              </button>
-              <button
-                type="submit"
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                {technician ? 'Update' : 'Simpan'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-interface AddFormModalProps {
-  type: 'brand' | 'category' | 'technician' | null;
-  item?: any;
-  onSave: (data: any) => void;
-  onClose: () => void;
-}
-
-interface ModelFormModalProps {
-  brand: any;
-  model?: any;
-  onSave: (data: any) => void;
-  onClose: () => void;
-}
-
-const ModelFormModal: React.FC<ModelFormModalProps> = ({ brand, model, onSave, onClose }) => {
-  const [formData, setFormData] = useState({
-    name: model?.name || '',
-    type: model?.type || 'inkjet'
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim()) return;
-    
-    onSave(formData);
-  };
-
-  const typeOptions = [
-    { value: 'inkjet', label: 'Inkjet' },
-    { value: 'laser', label: 'Laser' },
-    { value: 'multifunction', label: 'Multifunction' },
-    { value: 'dot_matrix', label: 'Dot Matrix' },
-    { value: 'thermal', label: 'Thermal' }
-  ];
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-md w-full">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">
-              {model ? 'Edit' : 'Tambah'} Model - {brand?.name}
-            </h3>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <X className="h-6 w-6" />
-            </button>
-          </div>
-          
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nama Model
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Masukkan nama model..."
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tipe Printer
-              </label>
-              <select
-                value={formData.type}
-                onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                {typeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            <div className="flex space-x-3 pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-              >
-                Batal
-              </button>
-              <button
-                type="submit"
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                {model ? 'Update' : 'Tambah'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-interface ProblemFormModalProps {
-  category: any;
-  problem?: any;
-  onSave: (data: any) => void;
-  onClose: () => void;
-}
-
-const ProblemFormModal: React.FC<ProblemFormModalProps> = ({ category, problem, onSave, onClose }) => {
-  const [formData, setFormData] = useState({
-    name: problem?.name || '',
-    description: problem?.description || '',
-    severity: problem?.severity || 'medium',
-    estimated_time: problem?.estimated_time || '',
-    estimated_cost: problem?.estimated_cost || ''
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim() || !formData.description.trim()) return;
-    
-    onSave(formData);
-  };
-
-  const severityOptions = [
-    { value: 'low', label: 'Rendah', color: 'text-green-600' },
-    { value: 'medium', label: 'Sedang', color: 'text-yellow-600' },
-    { value: 'high', label: 'Tinggi', color: 'text-red-600' }
-  ];
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-lg w-full">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">
-              {problem ? 'Edit' : 'Tambah'} Masalah - {category?.name}
-            </h3>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <X className="h-6 w-6" />
-            </button>
-          </div>
-          
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nama Masalah
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Masukkan nama masalah..."
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Deskripsi
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Masukkan deskripsi masalah..."
-                rows={3}
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tingkat Keparahan
-              </label>
-              <select
-                value={formData.severity}
-                onChange={(e) => setFormData(prev => ({ ...prev, severity: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                {severityOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Estimasi Waktu
-                </label>
-                <input
-                  type="text"
-                  value={formData.estimated_time}
-                  onChange={(e) => setFormData(prev => ({ ...prev, estimated_time: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="1-2 jam"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Estimasi Biaya
-                </label>
-                <input
-                  type="text"
-                  value={formData.estimated_cost}
-                  onChange={(e) => setFormData(prev => ({ ...prev, estimated_cost: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Rp 50.000"
-                />
-              </div>
-            </div>
-            
-            <div className="flex space-x-3 pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-              >
-                Batal
-              </button>
-              <button
-                type="submit"
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                {problem ? 'Update' : 'Tambah'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const AddFormModal: React.FC<AddFormModalProps> = ({ type, item, onSave, onClose }) => {
-  const [formData, setFormData] = useState({
-    name: item?.name || '',
-    icon: item?.icon || '🔧'
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim()) return;
-    
-    onSave(formData);
-  };
-
-  const iconOptions = [
-    '🔧', '⚙️', '🖨️', '💻', '📱', '🔌', '🔋', '💡', '🛠️', '⚡',
-    '🖥️', '📟', '🔍', '📊', '📈', '🎯', '⭐', '🚀', '💎', '🔥'
-  ];
-
-  if (!type) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-md w-full">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">
-              {item ? 'Edit' : 'Tambah'} {type === 'brand' ? 'Merk Printer' : 'Kategori Masalah'}
-            </h3>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <X className="h-6 w-6" />
-            </button>
-          </div>
-          
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nama {type === 'brand' ? 'Merk' : 'Kategori'}
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder={`Masukkan nama ${type === 'brand' ? 'merk' : 'kategori'}...`}
-                required
-              />
-            </div>
-            
-            {type === 'category' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Icon Kategori
-                </label>
-                <div className="grid grid-cols-10 gap-2 p-3 border border-gray-300 rounded-lg max-h-32 overflow-y-auto">
-                  {iconOptions.map((icon) => (
-                    <button
-                      key={icon}
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, icon }))}
-                      className={`p-2 text-lg rounded hover:bg-gray-100 ${
-                        formData.icon === icon ? 'bg-blue-100 ring-2 ring-blue-500' : ''
-                      }`}
-                    >
-                      {icon}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-sm text-gray-500 mt-1">
-                  Icon terpilih: <span className="text-lg">{formData.icon}</span>
-                </p>
-              </div>
-            )}
-            
-            <div className="flex space-x-3 pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-              >
-                Batal
-              </button>
-              <button
-                type="submit"
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                {item ? 'Update' : 'Tambah'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onLogout }) => {
-  const [activeTab, setActiveTab] = useState('overview');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [bookings, setBookings] = useState<any[]>([]);
-  const [technicians, setTechnicians] = useState<any[]>([]);
   const [printerBrands, setPrinterBrands] = useState<any[]>([]);
   const [problemCategories, setProblemCategories] = useState<any[]>([]);
+  const [technicians, setTechnicians] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [editingItem, setEditingItem] = useState<any>(null);
-  const [editingType, setEditingType] = useState<'brand' | 'category' | 'technician' | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [editingTechnician, setEditingTechnician] = useState<any>(null);
-  const [editingBrand, setEditingBrand] = useState<any>(null);
-  const [editingCategory, setEditingCategory] = useState<any>(null);
-  const [showTechnicianModal, setShowTechnicianModal] = useState(false);
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [selectedTechnician, setSelectedTechnician] = useState<any>(null);
-  const [showModelModal, setShowModelModal] = useState(false);
-  const [showProblemModal, setShowProblemModal] = useState(false);
-  const [selectedBrand, setSelectedBrand] = useState<any>(null);
-  const [selectedCategory, setSelectedCategory] = useState<any>(null);
-  const [editingModel, setEditingModel] = useState<any>(null);
-  const [editingProblem, setEditingProblem] = useState<any>(null);
-  const [stats, setStats] = useState({
-    totalBookings: 0,
-    pendingBookings: 0,
-    completedBookings: 0,
-    totalRevenue: 0,
-    thisMonthRevenue: 0,
-    activeTechnicians: 0
-  });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [showBookingDetail, setShowBookingDetail] = useState(false);
 
-  const prevBookingsLength = useRef(0);
-
-  // Load data from Supabase with realtime subscriptions
+  // Load all data
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [bookingsData, techniciansData, brandsData, categoriesData] = await Promise.all([
-          getAllBookings(),
-          fetchTechnicians(),
-          fetchPrinterBrands(),
-          fetchProblemCategories()
-        ]);
-        
-        setBookings(bookingsData);
-        setTechnicians(techniciansData);
-        setPrinterBrands(brandsData);
-        setProblemCategories(categoriesData);
-        
-        // Calculate stats
-        const totalBookings = bookingsData.length;
-        const pendingBookings = bookingsData.filter(b => b.status === 'pending').length;
-        const completedBookings = bookingsData.filter(b => b.status === 'completed').length;
-        const activeTechnicians = techniciansData.filter(t => t.is_active).length;
-        
-        setStats({
-          totalBookings,
-          pendingBookings,
-          completedBookings,
-          totalRevenue: completedBookings * 100000, // Estimate
-          thisMonthRevenue: completedBookings * 50000, // Estimate
-          activeTechnicians
-        });
-
-        // Check for new bookings and send notifications
-        if (prevBookingsLength.current > 0 && bookingsData.length > prevBookingsLength.current) {
-          const newBookings = bookingsData.slice(0, bookingsData.length - prevBookingsLength.current);
-          newBookings.forEach(booking => {
-            // Add notification to dashboard
-            setNotifications(prev => [...prev, {
-              id: Date.now(),
-              message: `Booking baru dari ${booking.customer.name} - ${booking.id}`,
-              timestamp: new Date().toISOString()
-            }]);
-          });
-        }
-        prevBookingsLength.current = bookingsData.length;
-      } catch (error) {
-        console.error('Error loading dashboard data:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadData();
-
+    loadAllData();
+    
     // Setup realtime subscriptions
     const bookingsChannel = supabase
-      .channel('bookings-changes')
+      .channel('admin-bookings-changes')
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'service_bookings'
-      }, async (payload) => {
-        console.log('Booking change detected:', payload);
-        // Reload bookings data
-        const updatedBookings = await getAllBookings();
-        setBookings(updatedBookings);
-        
-        // Update stats
-        const totalBookings = updatedBookings.length;
-        const pendingBookings = updatedBookings.filter(b => b.status === 'pending').length;
-        const completedBookings = updatedBookings.filter(b => b.status === 'completed').length;
-        
-        setStats(prev => ({
-          ...prev,
-          totalBookings,
-          pendingBookings,
-          completedBookings,
-          totalRevenue: completedBookings * 100000,
-          thisMonthRevenue: completedBookings * 50000
-        }));
-        
-        // Show notification for new bookings
-        if (payload.eventType === 'INSERT') {
-          setNotifications(prev => [...prev, {
-            id: Date.now(),
-            message: `Booking baru diterima - ${payload.new.id}`,
-            timestamp: new Date().toISOString()
-          }]);
-        }
-      })
-      .subscribe();
-
-    const techniciansChannel = supabase
-      .channel('technicians-changes')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'technicians'
-      }, async () => {
-        console.log('Technician change detected');
-        const updatedTechnicians = await fetchTechnicians();
-        setTechnicians(updatedTechnicians);
-        
-        const activeTechnicians = updatedTechnicians.filter(t => t.is_active).length;
-        setStats(prev => ({ ...prev, activeTechnicians }));
+      }, () => {
+        loadBookings();
       })
       .subscribe();
 
     const brandsChannel = supabase
-      .channel('brands-changes')
+      .channel('admin-brands-changes')
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'printer_brands'
-      }, async () => {
-        console.log('Printer brand change detected');
-        const updatedBrands = await fetchPrinterBrands();
-        setPrinterBrands(updatedBrands);
+      }, () => {
+        loadPrinterBrands();
       })
       .subscribe();
 
     const modelsChannel = supabase
-      .channel('models-changes')
+      .channel('admin-models-changes')
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'printer_models'
-      }, async () => {
-        console.log('Printer model change detected');
-        const updatedBrands = await fetchPrinterBrands();
-        setPrinterBrands(updatedBrands);
+      }, () => {
+        loadPrinterBrands();
       })
       .subscribe();
 
     const categoriesChannel = supabase
-      .channel('categories-changes')
+      .channel('admin-categories-changes')
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'problem_categories'
-      }, async () => {
-        console.log('Problem category change detected');
-        const updatedCategories = await fetchProblemCategories();
-        setProblemCategories(updatedCategories);
+      }, () => {
+        loadProblemCategories();
       })
       .subscribe();
 
     const problemsChannel = supabase
-      .channel('problems-changes')
+      .channel('admin-problems-changes')
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'problems'
-      }, async () => {
-        console.log('Problem change detected');
-        const updatedCategories = await fetchProblemCategories();
-        setProblemCategories(updatedCategories);
+      }, () => {
+        loadProblemCategories();
       })
       .subscribe();
 
-    // Cleanup subscriptions on unmount
+    const techniciansChannel = supabase
+      .channel('admin-technicians-changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'technicians'
+      }, () => {
+        loadTechnicians();
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(bookingsChannel);
-      supabase.removeChannel(techniciansChannel);
       supabase.removeChannel(brandsChannel);
       supabase.removeChannel(modelsChannel);
       supabase.removeChannel(categoriesChannel);
       supabase.removeChannel(problemsChannel);
+      supabase.removeChannel(techniciansChannel);
     };
   }, []);
 
-  // Removed auto-refresh to prevent unwanted page reloads
-
-  // Add new printer brand
-  const handleAddPrinterBrand = async (name: string) => {
+  const loadAllData = async () => {
+    setIsLoading(true);
     try {
-      if (editingBrand) {
-        await updatePrinterBrand(editingBrand.id, name);
-        setEditingBrand(null);
-      } else {
-        await addPrinterBrand(name);
-      }
-      const updatedBrands = await fetchPrinterBrands();
-      setPrinterBrands(updatedBrands);
-      setShowAddForm(false);
-      setEditingType(null);
-      setEditingBrand(null);
+      await Promise.all([
+        loadBookings(),
+        loadPrinterBrands(),
+        loadProblemCategories(),
+        loadTechnicians()
+      ]);
     } catch (error) {
-      console.error('Error adding printer brand:', error);
+      console.error('Error loading data:', error);
+      showErrorAlert('Gagal memuat data');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Add new problem category
-  const handleAddProblemCategory = async (name: string, icon: string) => {
+  const loadBookings = async () => {
     try {
-      if (editingCategory) {
-        await updateProblemCategory(editingCategory.id, name, icon);
-        setEditingCategory(null);
-      } else {
-        await addProblemCategory(name, icon);
-      }
-      const updatedCategories = await fetchProblemCategories();
-      setProblemCategories(updatedCategories);
-      setShowAddForm(false);
-      setEditingType(null);
-      setEditingCategory(null);
+      const data = await getAllBookings();
+      setBookings(data);
     } catch (error) {
-      console.error('Error adding problem category:', error);
+      console.error('Error loading bookings:', error);
     }
   };
 
-  // Add new technician
-  const handleAddTechnician = async (data: any) => {
+  const loadPrinterBrands = async () => {
     try {
-      if (editingTechnician) {
-        await supabase.from('technicians').update({
-          name: data.name,
-          phone: data.phone,
-          email: data.email,
-          specialization: data.specialization,
-          experience: parseInt(data.experience),
-          rating: parseFloat(data.rating) || 0,
-          schedule: data.schedule
-        }).eq('id', editingTechnician.id);
-        setEditingTechnician(null);
-      } else {
-        await supabase.from('technicians').insert({
-          name: data.name,
-          phone: data.phone,
-          email: data.email,
-          specialization: data.specialization,
-          experience: parseInt(data.experience),
-          rating: parseFloat(data.rating) || 0,
-          schedule: data.schedule
-        });
-      }
-      const updatedTechnicians = await fetchTechnicians();
-      setTechnicians(updatedTechnicians);
-      setShowTechnicianModal(false);
+      const data = await fetchPrinterBrands();
+      setPrinterBrands(data);
     } catch (error) {
-      console.error('Error adding technician:', error);
+      console.error('Error loading printer brands:', error);
     }
   };
 
-  const handleEditTechnician = (e: React.MouseEvent, technician: any) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    setEditingTechnician(technician);
-    setShowTechnicianModal(true);
-  };
-
-  const handleAddNewTechnician = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    setEditingTechnician(null);
-    setShowTechnicianModal(true);
-  };
-
-  const handleViewSchedule = (e: React.MouseEvent, technician: any) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    setSelectedTechnician(technician);
-    setShowScheduleModal(true);
-  };
-
-  const handleDeleteTechnician = async (e: React.MouseEvent, id: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const result = await Swal.fire({
-      title: 'Hapus Teknisi?',
-      text: 'Data teknisi akan dihapus secara permanen!',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#dc2626',
-      cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Ya, Hapus!',
-      cancelButtonText: 'Batal',
-      reverseButtons: true
-    });
-
-    if (result.isConfirmed) {
-      try {
-        await deleteTechnician(id);
-        const updatedTechnicians = await fetchTechnicians();
-        setTechnicians(updatedTechnicians);
-        
-        Swal.fire({
-          title: 'Berhasil!',
-          text: 'Teknisi berhasil dihapus',
-          icon: 'success',
-          timer: 2000,
-          showConfirmButton: false
-        });
-      } catch (error) {
-        Swal.fire({
-          title: 'Error!',
-          text: 'Gagal menghapus teknisi',
-          icon: 'error',
-          confirmButtonColor: '#dc2626'
-        });
-      }
-    }
-  };
-
-  const handleEditBrand = (e: React.MouseEvent, brand: any) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    setEditingBrand(brand);
-    setEditingType('brand');
-    setShowAddForm(true);
-  };
-
-  const handleEditCategory = (e: React.MouseEvent, category: any) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    setEditingCategory(category);
-    setEditingType('category');
-    setShowAddForm(true);
-  };
-
-  const handleDeleteBrand = async (e: React.MouseEvent, id: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const result = await Swal.fire({
-      title: 'Hapus Merk Printer?',
-      text: 'Data merk printer akan dihapus secara permanen!',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#dc2626',
-      cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Ya, Hapus!',
-      cancelButtonText: 'Batal',
-      reverseButtons: true
-    });
-
-    if (result.isConfirmed) {
-      try {
-        await deletePrinterBrand(id);
-        const updatedBrands = await fetchPrinterBrands();
-        setPrinterBrands(updatedBrands);
-        
-        Swal.fire({
-          title: 'Berhasil!',
-          text: 'Merk printer berhasil dihapus',
-          icon: 'success',
-          timer: 2000,
-          showConfirmButton: false
-        });
-      } catch (error) {
-        Swal.fire({
-          title: 'Error!',
-          text: 'Gagal menghapus merk printer',
-          icon: 'error',
-          confirmButtonColor: '#dc2626'
-        });
-      }
-    }
-  };
-
-  const handleDeleteCategory = async (e: React.MouseEvent, id: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const result = await Swal.fire({
-      title: 'Hapus Kategori?',
-      text: 'Data kategori akan dihapus secara permanen!',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#dc2626',
-      cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Ya, Hapus!',
-      cancelButtonText: 'Batal',
-      reverseButtons: true
-    });
-
-    if (result.isConfirmed) {
-      try {
-        await deleteProblemCategory(id);
-        const updatedCategories = await fetchProblemCategories();
-        setProblemCategories(updatedCategories);
-        
-        Swal.fire({
-          title: 'Berhasil!',
-          text: 'Kategori berhasil dihapus',
-          icon: 'success',
-          timer: 2000,
-          showConfirmButton: false
-        });
-      } catch (error) {
-        Swal.fire({
-          title: 'Error!',
-          text: 'Gagal menghapus kategori',
-          icon: 'error',
-          confirmButtonColor: '#dc2626'
-        });
-      }
-    }
-  };
-
-  // Model management handlers
-  const handleAddModel = (e: React.MouseEvent, brand: any) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    setSelectedBrand(brand);
-    setEditingModel(null);
-    setShowModelModal(true);
-  };
-
-  const handleEditModel = (e: React.MouseEvent, brand: any, model: any) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    setSelectedBrand(brand);
-    setEditingModel(model);
-    setShowModelModal(true);
-  };
-
-  const handleDeleteModel = async (e: React.MouseEvent, modelId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const result = await Swal.fire({
-      title: 'Hapus Model?',
-      text: 'Data model akan dihapus secara permanen!',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#dc2626',
-      cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Ya, Hapus!',
-      cancelButtonText: 'Batal',
-      reverseButtons: true
-    });
-
-    if (result.isConfirmed) {
-      try {
-        await deletePrinterModel(modelId);
-        const updatedBrands = await fetchPrinterBrands();
-        setPrinterBrands(updatedBrands);
-        
-        Swal.fire({
-          title: 'Berhasil!',
-          text: 'Model berhasil dihapus',
-          icon: 'success',
-          timer: 2000,
-          showConfirmButton: false
-        });
-      } catch (error) {
-        Swal.fire({
-          title: 'Error!',
-          text: 'Gagal menghapus model',
-          icon: 'error',
-          confirmButtonColor: '#dc2626'
-        });
-      }
-    }
-  };
-
-  const handleSaveModel = async (data: any) => {
+  const loadProblemCategories = async () => {
     try {
-      if (editingModel) {
-        await updatePrinterModel(editingModel.id, data.name, data.type);
-      } else {
-        await addPrinterModel(selectedBrand.id, data.name, data.type);
-      }
-      
-      const updatedBrands = await fetchPrinterBrands();
-      setPrinterBrands(updatedBrands);
-      setShowModelModal(false);
-      setSelectedBrand(null);
-      setEditingModel(null);
-      
-      Swal.fire({
-        title: 'Berhasil!',
-        text: `Model ${editingModel ? 'diperbarui' : 'ditambahkan'} dengan sukses`,
-        icon: 'success',
-        timer: 2000,
-        showConfirmButton: false
-      });
+      const data = await fetchProblemCategories();
+      setProblemCategories(data);
     } catch (error) {
-      Swal.fire({
-        title: 'Error!',
-        text: `Gagal ${editingModel ? 'memperbarui' : 'menambahkan'} model`,
-        icon: 'error',
-        confirmButtonColor: '#dc2626'
-      });
+      console.error('Error loading problem categories:', error);
     }
   };
 
-  // Problem management handlers
-  const handleAddProblem = (e: React.MouseEvent, category: any) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    setSelectedCategory(category);
-    setEditingProblem(null);
-    setShowProblemModal(true);
-  };
-
-  const handleEditProblem = (e: React.MouseEvent, category: any, problem: any) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    setSelectedCategory(category);
-    setEditingProblem(problem);
-    setShowProblemModal(true);
-  };
-
-  const handleDeleteProblem = async (e: React.MouseEvent, problemId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const result = await Swal.fire({
-      title: 'Hapus Masalah?',
-      text: 'Data masalah akan dihapus secara permanen!',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#dc2626',
-      cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Ya, Hapus!',
-      cancelButtonText: 'Batal',
-      reverseButtons: true
-    });
-
-    if (result.isConfirmed) {
-      try {
-        await deleteProblem(problemId);
-        const updatedCategories = await fetchProblemCategories();
-        setProblemCategories(updatedCategories);
-        
-        Swal.fire({
-          title: 'Berhasil!',
-          text: 'Masalah berhasil dihapus',
-          icon: 'success',
-          timer: 2000,
-          showConfirmButton: false
-        });
-      } catch (error) {
-        Swal.fire({
-          title: 'Error!',
-          text: 'Gagal menghapus masalah',
-          icon: 'error',
-          confirmButtonColor: '#dc2626'
-        });
-      }
-    }
-  };
-
-  const handleSaveProblem = async (data: any) => {
+  const loadTechnicians = async () => {
     try {
-      if (editingProblem) {
-        await updateProblem(
-          editingProblem.id, 
-          data.name, 
-          data.description, 
-          data.severity, 
-          data.estimated_time, 
-          data.estimated_cost
-        );
-      } else {
-        await addProblem(
-          selectedCategory.id, 
-          data.name, 
-          data.description, 
-          data.severity, 
-          data.estimated_time, 
-          data.estimated_cost
-        );
-      }
-      
-      const updatedCategories = await fetchProblemCategories();
-      setProblemCategories(updatedCategories);
-      setShowProblemModal(false);
-      setSelectedCategory(null);
-      setEditingProblem(null);
-      
-      Swal.fire({
-        title: 'Berhasil!',
-        text: `Masalah ${editingProblem ? 'diperbarui' : 'ditambahkan'} dengan sukses`,
-        icon: 'success',
-        timer: 2000,
-        showConfirmButton: false
-      });
+      const data = await fetchTechnicians();
+      setTechnicians(data);
     } catch (error) {
-      Swal.fire({
-        title: 'Error!',
-        text: `Gagal ${editingProblem ? 'memperbarui' : 'menambahkan'} masalah`,
-        icon: 'error',
-        confirmButtonColor: '#dc2626'
-      });
-    }
-  };
-  
-  // Service data
-  const serviceCategories = {
-    komputer: {
-      title: 'Layanan Komputer',
-      icon: Monitor,
-      services: [
-        {
-          name: 'Install Ulang Windows',
-          description: 'Install ulang sistem operasi Windows dengan driver lengkap',
-          price: 'Rp 150.000',
-          duration: '2-3 jam',
-          category: 'Software'
-        },
-        {
-          name: 'Upgrade RAM & Storage',
-          description: 'Upgrade memory RAM dan storage SSD/HDD',
-          price: 'Rp 100.000',
-          duration: '1-2 jam',
-          category: 'Hardware'
-        },
-        {
-          name: 'Cleaning & Maintenance',
-          description: 'Pembersihan hardware dan maintenance rutin',
-          price: 'Rp 75.000',
-          duration: '1 jam',
-          category: 'Maintenance'
-        },
-        {
-          name: 'Virus Removal',
-          description: 'Pembersihan virus dan malware lengkap',
-          price: 'Rp 100.000',
-          duration: '2-4 jam',
-          category: 'Security'
-        },
-        {
-          name: 'Data Recovery',
-          description: 'Pemulihan data yang hilang atau terhapus',
-          price: 'Rp 200.000',
-          duration: '4-8 jam',
-          category: 'Recovery'
-        },
-        {
-          name: 'Network Setup',
-          description: 'Konfigurasi jaringan dan internet',
-          price: 'Rp 125.000',
-          duration: '1-2 jam',
-          category: 'Network'
-        }
-      ]
-    },
-    laptop: {
-      title: 'Layanan Laptop',
-      icon: Laptop,
-      services: [
-        {
-          name: 'Ganti Keyboard',
-          description: 'Penggantian keyboard laptop yang rusak',
-          price: 'Rp 200.000',
-          duration: '1-2 jam',
-          category: 'Hardware'
-        },
-        {
-          name: 'Ganti LCD/LED Screen',
-          description: 'Penggantian layar laptop yang pecah atau bergaris',
-          price: 'Rp 800.000',
-          duration: '2-3 jam',
-          category: 'Hardware'
-        },
-        {
-          name: 'Ganti Baterai',
-          description: 'Penggantian baterai laptop yang sudah drop',
-          price: 'Rp 300.000',
-          duration: '30 menit',
-          category: 'Hardware'
-        },
-        {
-          name: 'Repair Charging Port',
-          description: 'Perbaikan port charger yang longgar atau rusak',
-          price: 'Rp 150.000',
-          duration: '1-2 jam',
-          category: 'Hardware'
-        },
-        {
-          name: 'Cooling System Repair',
-          description: 'Perbaikan sistem pendingin dan ganti thermal paste',
-          price: 'Rp 125.000',
-          duration: '1-2 jam',
-          category: 'Maintenance'
-        },
-        {
-          name: 'Motherboard Repair',
-          description: 'Perbaikan motherboard laptop',
-          price: 'Rp 500.000',
-          duration: '1-3 hari',
-          category: 'Hardware'
-        }
-      ]
-    },
-    printer: {
-      title: 'Layanan Printer',
-      icon: Printer,
-      services: [
-        {
-          name: 'Head Cleaning',
-          description: 'Pembersihan head printer untuk hasil cetak optimal',
-          price: 'Rp 50.000',
-          duration: '30 menit',
-          category: 'Maintenance'
-        },
-        {
-          name: 'Refill Tinta',
-          description: 'Isi ulang tinta printer dengan kualitas terbaik',
-          price: 'Rp 25.000',
-          duration: '15 menit',
-          category: 'Consumable'
-        },
-        {
-          name: 'Ganti Cartridge',
-          description: 'Penggantian cartridge printer yang rusak',
-          price: 'Rp 150.000',
-          duration: '15 menit',
-          category: 'Hardware'
-        },
-        {
-          name: 'Paper Jam Repair',
-          description: 'Perbaikan masalah paper jam dan feeding',
-          price: 'Rp 75.000',
-          duration: '30 menit',
-          category: 'Repair'
-        },
-        {
-          name: 'Roller Cleaning',
-          description: 'Pembersihan roller untuk feeding yang lancar',
-          price: 'Rp 40.000',
-          duration: '30 menit',
-          category: 'Maintenance'
-        },
-        {
-          name: 'Driver Installation',
-          description: 'Install driver printer dan konfigurasi',
-          price: 'Rp 30.000',
-          duration: '30 menit',
-          category: 'Software'
-        }
-      ]
+      console.error('Error loading technicians:', error);
     }
   };
 
-  const handleStatusUpdate = async (e: React.MouseEvent, bookingId: string, newStatus: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const statusText = {
-      'confirmed': 'dikonfirmasi',
-      'cancelled': 'dibatalkan',
-      'in-progress': 'sedang dikerjakan',
-      'completed': 'selesai'
-    }[newStatus] || newStatus;
+  // Filter bookings
+  const filteredBookings = bookings.filter(booking => {
+    const matchesSearch = booking.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         booking.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         booking.customer.phone.includes(searchTerm);
+    const matchesStatus = statusFilter === 'all' || booking.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
-    const result = await Swal.fire({
-      title: `Ubah Status Booking?`,
-      text: `Booking akan ${statusText}`,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonColor: newStatus === 'cancelled' ? '#dc2626' : '#3b82f6',
-      cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Ya, Ubah!',
-      cancelButtonText: 'Batal'
-    });
-
-    if (result.isConfirmed) {
-      try {
-        await updateBookingStatus(bookingId, newStatus);
-        // Reload bookings
-        const updatedBookings = await getAllBookings();
-        setBookings(updatedBookings);
-        
-        Swal.fire({
-          title: 'Berhasil!',
-          text: `Status booking berhasil ${statusText}`,
-          icon: 'success',
-          timer: 2000,
-          showConfirmButton: false
-        });
-      } catch (error) {
-        console.error('Error updating status:', error);
-        Swal.fire({
-          title: 'Error!',
-          text: 'Gagal mengubah status booking',
-          icon: 'error',
-          confirmButtonColor: '#dc2626'
-        });
-      }
-    }
+  // Statistics
+  const stats = {
+    totalBookings: bookings.length,
+    pendingBookings: bookings.filter(b => b.status === 'pending').length,
+    completedBookings: bookings.filter(b => b.status === 'completed').length,
+    totalTechnicians: technicians.filter(t => t.is_active).length
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'in-progress':
-        return 'bg-blue-100 text-blue-800';
-      case 'completed':
-        return 'bg-green-100 text-green-800';
-      case 'cancelled':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'confirmed': return 'bg-blue-100 text-blue-800';
+      case 'in-progress': return 'bg-purple-100 text-purple-800';
+      case 'completed': return 'bg-green-100 text-green-800';
+      case 'cancelled': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const getStatusIcon = (status: string) => {
+  const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'pending':
-        return <Clock className="h-4 w-4" />;
-      case 'in-progress':
-        return <AlertCircle className="h-4 w-4" />;
-      case 'completed':
-        return <CheckCircle className="h-4 w-4" />;
-      default:
-        return <Clock className="h-4 w-4" />;
+      case 'pending': return 'Menunggu';
+      case 'confirmed': return 'Dikonfirmasi';
+      case 'in-progress': return 'Dalam Proses';
+      case 'completed': return 'Selesai';
+      case 'cancelled': return 'Dibatalkan';
+      default: return status;
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR'
-    }).format(amount);
+  const handleStatusUpdate = async (bookingId: string, newStatus: string) => {
+    try {
+      const result = await SweetAlertConfig.confirm(
+        'Ubah Status Booking?',
+        `Status akan diubah menjadi "${getStatusLabel(newStatus)}"`
+      );
+
+      if (result.isConfirmed) {
+        const success = await updateBookingStatus(bookingId, newStatus);
+        if (success) {
+          showSuccessAlert('Status booking berhasil diubah');
+          loadBookings();
+        } else {
+          showErrorAlert('Gagal mengubah status booking');
+        }
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+      showErrorAlert('Terjadi kesalahan saat mengubah status');
+    }
+  };
+
+  const handleTechnicianAssign = async (bookingId: string) => {
+    try {
+      const { value: technicianId } = await Swal.fire({
+        title: 'Pilih Teknisi',
+        input: 'select',
+        inputOptions: technicians.reduce((options, tech) => {
+          options[tech.id] = `${tech.name} (${tech.specialization.join(', ')})`;
+          return options;
+        }, {} as any),
+        inputPlaceholder: 'Pilih teknisi...',
+        showCancelButton: true,
+        confirmButtonText: 'Tugaskan',
+        cancelButtonText: 'Batal'
+      });
+
+      if (technicianId) {
+        const success = await assignTechnician(bookingId, technicianId);
+        if (success) {
+          showSuccessAlert('Teknisi berhasil ditugaskan');
+          loadBookings();
+        } else {
+          showErrorAlert('Gagal menugaskan teknisi');
+        }
+      }
+    } catch (error) {
+      console.error('Error assigning technician:', error);
+      showErrorAlert('Terjadi kesalahan saat menugaskan teknisi');
+    }
+  };
+
+  const handleActualCostUpdate = async (bookingId: string) => {
+    try {
+      const { value: actualCost } = await Swal.fire({
+        title: 'Update Biaya Aktual',
+        input: 'text',
+        inputLabel: 'Biaya Aktual',
+        inputPlaceholder: 'Contoh: Rp 150.000',
+        showCancelButton: true,
+        confirmButtonText: 'Update',
+        cancelButtonText: 'Batal',
+        inputValidator: (value) => {
+          if (!value) return 'Biaya tidak boleh kosong!';
+        }
+      });
+
+      if (actualCost) {
+        const success = await updateActualCost(bookingId, actualCost);
+        if (success) {
+          showSuccessAlert('Biaya aktual berhasil diupdate');
+          loadBookings();
+        } else {
+          showErrorAlert('Gagal mengupdate biaya aktual');
+        }
+      }
+    } catch (error) {
+      console.error('Error updating actual cost:', error);
+      showErrorAlert('Terjadi kesalahan saat mengupdate biaya');
+    }
+  };
+
+  const handleAddBrand = async () => {
+    try {
+      const { value: brandName } = await Swal.fire({
+        title: 'Tambah Merk Printer',
+        input: 'text',
+        inputLabel: 'Nama Merk',
+        inputPlaceholder: 'Contoh: Canon',
+        showCancelButton: true,
+        confirmButtonText: 'Tambah',
+        cancelButtonText: 'Batal',
+        inputValidator: (value) => {
+          if (!value) return 'Nama merk tidak boleh kosong!';
+        }
+      });
+
+      if (brandName) {
+        await addPrinterBrand(brandName);
+        showSuccessAlert('Merk printer berhasil ditambahkan');
+        loadPrinterBrands();
+      }
+    } catch (error) {
+      console.error('Error adding brand:', error);
+      showErrorAlert('Gagal menambahkan merk printer');
+    }
+  };
+
+  const handleAddModel = async (brandId: string) => {
+    try {
+      const { value: formValues } = await Swal.fire({
+        title: 'Tambah Model Printer',
+        html: `
+          <input id="model-name" class="swal2-input" placeholder="Nama Model" />
+          <select id="model-type" class="swal2-input">
+            <option value="">Pilih Tipe</option>
+            <option value="inkjet">Inkjet</option>
+            <option value="laser">Laser</option>
+            <option value="multifunction">Multifunction</option>
+          </select>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Tambah',
+        cancelButtonText: 'Batal',
+        preConfirm: () => {
+          const name = (document.getElementById('model-name') as HTMLInputElement).value;
+          const type = (document.getElementById('model-type') as HTMLSelectElement).value;
+          if (!name || !type) {
+            Swal.showValidationMessage('Semua field harus diisi!');
+            return false;
+          }
+          return { name, type };
+        }
+      });
+
+      if (formValues) {
+        await addPrinterModel(brandId, formValues.name, formValues.type);
+        showSuccessAlert('Model printer berhasil ditambahkan');
+        loadPrinterBrands();
+      }
+    } catch (error) {
+      console.error('Error adding model:', error);
+      showErrorAlert('Gagal menambahkan model printer');
+    }
+  };
+
+  const handleAddTechnician = async () => {
+    try {
+      const { value: formValues } = await Swal.fire({
+        title: 'Tambah Teknisi',
+        html: `
+          <input id="tech-name" class="swal2-input" placeholder="Nama Lengkap" />
+          <input id="tech-phone" class="swal2-input" placeholder="Nomor HP" />
+          <input id="tech-email" class="swal2-input" placeholder="Email" />
+          <input id="tech-specialization" class="swal2-input" placeholder="Spesialisasi (pisahkan dengan koma)" />
+          <input id="tech-experience" class="swal2-input" type="number" placeholder="Pengalaman (tahun)" />
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Tambah',
+        cancelButtonText: 'Batal',
+        preConfirm: () => {
+          const name = (document.getElementById('tech-name') as HTMLInputElement).value;
+          const phone = (document.getElementById('tech-phone') as HTMLInputElement).value;
+          const email = (document.getElementById('tech-email') as HTMLInputElement).value;
+          const specialization = (document.getElementById('tech-specialization') as HTMLInputElement).value;
+          const experience = parseInt((document.getElementById('tech-experience') as HTMLInputElement).value);
+          
+          if (!name || !phone) {
+            Swal.showValidationMessage('Nama dan nomor HP harus diisi!');
+            return false;
+          }
+          
+          return {
+            name,
+            phone,
+            email,
+            specialization: specialization.split(',').map(s => s.trim()),
+            experience: experience || 0,
+            rating: 0
+          };
+        }
+      });
+
+      if (formValues) {
+        await addTechnician(formValues);
+        showSuccessAlert('Teknisi berhasil ditambahkan');
+        loadTechnicians();
+      }
+    } catch (error) {
+      console.error('Error adding technician:', error);
+      showErrorAlert('Gagal menambahkan teknisi');
+    }
+  };
+
+  const handleViewBookingDetail = async (bookingId: string) => {
+    try {
+      const booking = await getBookingById(bookingId);
+      if (booking) {
+        setSelectedBooking(booking);
+        setShowBookingDetail(true);
+      }
+    } catch (error) {
+      console.error('Error loading booking detail:', error);
+      showErrorAlert('Gagal memuat detail booking');
+    }
   };
 
   if (isLoading) {
@@ -1633,32 +458,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onLogout })
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <NotificationSystem notifications={notifications} />
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4 sm:py-6">
-            <div>
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-              <p className="text-gray-600 text-sm sm:text-base">Kelola service printer Barokah Printer</p>
+          <div className="flex justify-between items-center py-4">
+            <div className="flex items-center space-x-4">
+              <img 
+                src="/img/logo.jpeg" 
+                alt="Barokah Printer" 
+                className="h-10 w-10 rounded-full"
+              />
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">Admin Dashboard</h1>
+                <p className="text-sm text-gray-600">Barokah Printer Management</p>
+              </div>
             </div>
-            <div className="flex items-center space-x-2 sm:space-x-4">
-              <button className="p-2 text-gray-400 hover:text-gray-600">
-                <Bell className="h-5 w-5 sm:h-6 sm:w-6" />
-                {notifications.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                    {notifications.length}
-                  </span>
-                )}
-              </button>
-              <button onClick={() => setShowSettings(true)} className="p-2 text-gray-400 hover:text-gray-600">
-                <Settings className="h-5 w-5 sm:h-6 sm:w-6" />
-              </button>
-              <button 
-                onClick={onLogout}
-                className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => onNavigate('home')}
+                className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
               >
-                <LogOut className="h-5 w-5 sm:h-6 sm:w-6" />
+                Lihat Website
+              </button>
+              <button
+                onClick={onLogout}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors flex items-center space-x-2"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Logout</span>
               </button>
             </div>
           </div>
@@ -1667,159 +494,99 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onLogout })
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Navigation Tabs */}
-        <div className="mb-6 sm:mb-8">
-          <nav className="flex flex-wrap gap-2 sm:gap-0 sm:space-x-8">
+        <div className="mb-8">
+          <nav className="flex space-x-8">
             {[
-              { id: 'overview', name: 'Overview', icon: BarChart3 },
-              { id: 'bookings', name: 'Bookings', icon: Calendar },
-              { id: 'technicians', name: 'Teknisi', icon: Users },
-              { id: 'printer-brands', name: 'Merk Printer', icon: Printer },
-              { id: 'problem-categories', name: 'Kategori Masalah', icon: Wrench },
-              { id: 'settings', name: 'Pengaturan', icon: Settings },
-              { id: 'reports', name: 'Laporan', icon: BarChart3 }
+              { id: 'dashboard', name: 'Dashboard', icon: BarChart3 },
+              { id: 'bookings', name: 'Booking Management', icon: Calendar },
+              { id: 'brands', name: 'Printer Brands', icon: Printer },
+              { id: 'problems', name: 'Problem Categories', icon: Wrench },
+              { id: 'technicians', name: 'Technicians', icon: Users }
             ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center space-x-1 sm:space-x-2 py-2 px-2 sm:px-4 border-b-2 font-medium text-xs sm:text-sm ${
+                className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                   activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                <tab.icon className="h-4 w-4 sm:h-5 sm:w-5" />
-                <span className="hidden sm:inline">{tab.name}</span>
-                <span className="sm:hidden">{tab.name.split(' ')[0]}</span>
+                <tab.icon className="h-4 w-4" />
+                <span>{tab.name}</span>
               </button>
             ))}
           </nav>
         </div>
 
-        {/* Overview Tab */}
-        {activeTab === 'overview' && (
+        {/* Dashboard Tab */}
+        {activeTab === 'dashboard' && (
           <div className="space-y-8">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mobile-fade-left">
-              <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs sm:text-sm font-medium text-gray-600">Total Booking</p>
-                    <p className="text-2xl sm:text-3xl font-bold text-gray-900">{stats.totalBookings}</p>
-                  </div>
-                  <div className="bg-blue-100 p-2 sm:p-3 rounded-full">
-                    <Calendar className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs sm:text-sm font-medium text-gray-600">Pending</p>
-                    <p className="text-2xl sm:text-3xl font-bold text-yellow-600">{stats.pendingBookings}</p>
-                  </div>
-                  <div className="bg-yellow-100 p-2 sm:p-3 rounded-full">
-                    <Clock className="h-5 w-5 sm:h-6 sm:w-6 text-yellow-600" />
+            {/* Statistics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[
+                { title: 'Total Booking', value: stats.totalBookings, icon: Package, color: 'bg-blue-500' },
+                { title: 'Menunggu Konfirmasi', value: stats.pendingBookings, icon: Clock, color: 'bg-yellow-500' },
+                { title: 'Selesai', value: stats.completedBookings, icon: CheckCircle, color: 'bg-green-500' },
+                { title: 'Total Teknisi', value: stats.totalTechnicians, icon: Users, color: 'bg-purple-500' }
+              ].map((stat, index) => (
+                <div key={index} className="bg-white rounded-lg shadow p-6">
+                  <div className="flex items-center">
+                    <div className={`${stat.color} rounded-md p-3`}>
+                      <stat.icon className="h-6 w-6 text-white" />
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-gray-600">{stat.title}</p>
+                      <p className="text-2xl font-semibold text-gray-900">{stat.value}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-
-              <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs sm:text-sm font-medium text-gray-600">Selesai</p>
-                    <p className="text-2xl sm:text-3xl font-bold text-green-600">{stats.completedBookings}</p>
-                  </div>
-                  <div className="bg-green-100 p-2 sm:p-3 rounded-full">
-                    <CheckCircle className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs sm:text-sm font-medium text-gray-600">Revenue Bulan Ini</p>
-                    <p className="text-lg sm:text-2xl font-bold text-blue-600">
-                      {formatCurrency(stats.thisMonthRevenue)}
-                    </p>
-                  </div>
-                  <div className="bg-blue-100 p-2 sm:p-3 rounded-full">
-                    <BarChart3 className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
-                  </div>
-                </div>
-              </div>
+              ))}
             </div>
 
             {/* Recent Bookings */}
-            <div className="bg-white rounded-lg shadow-md mobile-fade-left">
-              <div className="p-4 sm:p-6 border-b border-gray-200">
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Booking Terbaru</h2>
+            <div className="bg-white rounded-lg shadow">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900">Booking Terbaru</h3>
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Customer
-                      </th>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Printer
-                      </th>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Masalah
-                      </th>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Teknisi
-                      </th>
-                      <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Aksi
-                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID & Customer</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Printer</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {bookings.slice(0, 5).map((booking) => (
                       <tr key={booking.id}>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <div>
-                            <div className="text-xs sm:text-sm font-medium text-gray-900">
-                              {booking.customer.name}
-                            </div>
-                            <div className="text-xs sm:text-sm text-gray-500">{booking.customer.phone}</div>
+                            <div className="text-sm font-medium text-gray-900">#{booking.id}</div>
+                            <div className="text-sm text-gray-500">{booking.customer.name}</div>
                           </div>
                         </td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                          <div className="text-xs sm:text-sm text-gray-900">
-                            {booking.printer.brand} {booking.printer.model}
-                          </div>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{booking.printer.brand} {booking.printer.model}</div>
                         </td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                          <div className="text-xs sm:text-sm text-gray-900">{booking.problem.description}</div>
-                        </td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
-                            {getStatusIcon(booking.status)}
-                            <span className="ml-1">{booking.status}</span>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(booking.status)}`}>
+                            {getStatusLabel(booking.status)}
                           </span>
                         </td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900">
-                          {booking.technician}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(booking.createdAt).toLocaleDateString('id-ID')}
                         </td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium">
-                          <div className="flex space-x-1 sm:space-x-2">
-                            <button className="text-blue-600 hover:text-blue-900">
-                              <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
-                            </button>
-                            <button 
-                              onClick={(e) => handleStatusUpdate(e, booking.id, 'confirmed')}
-                              className="text-green-600 hover:text-green-900"
-                            >
-                              <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
-                            </button>
-                          </div>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button
+                            onClick={() => handleViewBookingDetail(booking.id)}
+                            className="text-blue-600 hover:text-blue-900"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -1833,114 +600,116 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onLogout })
         {/* Bookings Tab */}
         {activeTab === 'bookings' && (
           <div className="space-y-6">
-            {/* Search and Filter */}
-            <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md mobile-fade-left">
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+            {/* Filters */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 sm:h-5 sm:w-5" />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <input
                       type="text"
-                      placeholder="Cari customer, phone, atau ID booking..."
+                      placeholder="Cari berdasarkan ID, nama, atau nomor HP..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-9 sm:pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
+                      className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button className="flex items-center px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm sm:text-base">
-                    <Filter className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                    <span className="hidden sm:inline">Filter</span>
-                  </button>
-                  <button className="flex items-center px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm sm:text-base">
-                    <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                    <span className="hidden sm:inline">Export</span>
-                  </button>
+                <div className="sm:w-48">
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="all">Semua Status</option>
+                    <option value="pending">Menunggu</option>
+                    <option value="confirmed">Dikonfirmasi</option>
+                    <option value="in-progress">Dalam Proses</option>
+                    <option value="completed">Selesai</option>
+                    <option value="cancelled">Dibatalkan</option>
+                  </select>
                 </div>
+                <button
+                  onClick={loadBookings}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  <span>Refresh</span>
+                </button>
               </div>
             </div>
 
             {/* Bookings Table */}
-            <div className="bg-white rounded-lg shadow-md overflow-hidden mobile-fade-left">
+            <div className="bg-white rounded-lg shadow overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-2 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        ID & Customer
-                      </th>
-                      <th className="px-2 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Printer & Masalah
-                      </th>
-                      <th className="px-2 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Service
-                      </th>
-                      <th className="px-2 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Jadwal
-                      </th>
-                      <th className="px-2 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-2 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Aksi
-                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID & Customer</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Printer & Masalah</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Teknisi</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {bookings.map((booking) => (
+                    {filteredBookings.map((booking) => (
                       <tr key={booking.id}>
-                        <td className="px-2 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <div>
-                            <div className="text-xs sm:text-sm font-medium text-blue-600">
-                              #{booking.id}
-                            </div>
-                            <div className="text-xs sm:text-sm font-medium text-gray-900">
-                              {booking.customer.name}
-                            </div>
-                            <div className="text-xs sm:text-sm text-gray-500">{booking.customer.phone}</div>
+                            <div className="text-sm font-medium text-gray-900">#{booking.id}</div>
+                            <div className="text-sm text-gray-500">{booking.customer.name}</div>
+                            <div className="text-sm text-gray-500">{booking.customer.phone}</div>
                           </div>
                         </td>
-                        <td className="px-2 sm:px-6 py-3 sm:py-4">
+                        <td className="px-6 py-4">
                           <div>
-                            <div className="text-xs sm:text-sm font-medium text-gray-900">
-                              {booking.printer.brand} {booking.printer.model}
-                            </div>
-                            <div className="text-xs sm:text-sm text-gray-500">{booking.problem.category}</div>
+                            <div className="text-sm font-medium text-gray-900">{booking.printer.brand} {booking.printer.model}</div>
+                            <div className="text-sm text-gray-500">{booking.problem.category}</div>
                           </div>
                         </td>
-                        <td className="px-2 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                          <div className="text-xs sm:text-sm text-gray-900">{booking.service.type}</div>
-                          <div className="text-xs sm:text-sm text-gray-500">{booking.technician}</div>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{booking.technician}</div>
                         </td>
-                        <td className="px-2 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                          <div>
-                            <div className="text-xs sm:text-sm text-gray-900">{booking.service.date}</div>
-                            <div className="text-xs sm:text-sm text-gray-500">{booking.service.time} WIB</div>
-                          </div>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <select
+                            value={booking.status}
+                            onChange={(e) => handleStatusUpdate(booking.id, e.target.value)}
+                            className={`text-xs font-semibold rounded-full px-2 py-1 border-0 ${getStatusColor(booking.status)}`}
+                          >
+                            <option value="pending">Menunggu</option>
+                            <option value="confirmed">Dikonfirmasi</option>
+                            <option value="in-progress">Dalam Proses</option>
+                            <option value="completed">Selesai</option>
+                            <option value="cancelled">Dibatalkan</option>
+                          </select>
                         </td>
-                        <td className="px-2 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
-                            {getStatusIcon(booking.status)}
-                            <span className="ml-1 capitalize">{booking.status}</span>
-                          </span>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(booking.createdAt).toLocaleDateString('id-ID')}
                         </td>
-                        <td className="px-2 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium">
-                          <div className="flex space-x-1 sm:space-x-2">
-                            <button className="text-blue-600 hover:text-blue-900">
-                              <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleViewBookingDetail(booking.id)}
+                              className="text-blue-600 hover:text-blue-900"
+                              title="Lihat Detail"
+                            >
+                              <Eye className="h-4 w-4" />
                             </button>
-                            <button 
-                              onClick={(e) => handleStatusUpdate(e, booking.id, 'confirmed')}
+                            <button
+                              onClick={() => handleTechnicianAssign(booking.id)}
                               className="text-green-600 hover:text-green-900"
+                              title="Tugaskan Teknisi"
                             >
-                              <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
+                              <Users className="h-4 w-4" />
                             </button>
-                            <button 
-                              onClick={(e) => handleStatusUpdate(e, booking.id, 'cancelled')}
-                              className="text-red-600 hover:text-red-900"
+                            <button
+                              onClick={() => handleActualCostUpdate(booking.id)}
+                              className="text-purple-600 hover:text-purple-900"
+                              title="Update Biaya"
                             >
-                              <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                              <Edit className="h-4 w-4" />
                             </button>
                           </div>
                         </td>
@@ -1953,554 +722,219 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onLogout })
           </div>
         )}
 
-        {/* Technicians Tab */}
-        {activeTab === 'technicians' && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow-md mobile-fade-left">
-              <div className="p-4 sm:p-6 border-b border-gray-200">
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-                  <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Manajemen Teknisi</h2>
-                  <button
-                    onClick={handleAddNewTechnician}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span>Tambah</span>
-                  </button>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 p-4 sm:p-6">
-                {technicians.map((tech) => (
-                  <div key={tech.id} className="border border-gray-200 rounded-lg p-4 sm:p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <h3 className="text-base sm:text-lg font-semibold text-gray-900">{tech.name}</h3>
-                        <p className="text-xs sm:text-sm text-gray-600">{tech.phone}</p>
-                      </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        tech.is_available 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {tech.is_available ? 'Tersedia' : 'Sibuk'}
-                      </span>
-                    </div>
-                    
-                    <div className="space-y-2 text-xs sm:text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Pengalaman:</span>
-                        <span className="font-medium">{tech.experience} tahun</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Rating:</span>
-                        <span className="font-medium">{tech.rating}/5.0</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Jadwal:</span>
-                        <button 
-                          onClick={(e) => handleViewSchedule(e, tech)}
-                          className="text-blue-600 hover:text-blue-800 text-xs font-medium underline"
-                        >
-                          Lihat Jadwal
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <div className="mt-4">
-                      <p className="text-xs sm:text-sm text-gray-600 mb-2">Spesialisasi:</p>
-                      <div className="flex flex-wrap gap-1">
-                        {tech.specialization.map((spec, index) => (
-                          <span
-                            key={index}
-                            className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
-                          >
-                            {spec}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <div className="mt-4 flex space-x-2">
-                      <button 
-                        onClick={(e) => handleEditTechnician(e, tech)}
-                        className="flex-1 bg-blue-600 text-white py-2 px-2 sm:px-3 rounded text-xs sm:text-sm hover:bg-blue-700"
-                      >
-                        Edit
-                      </button>
-                      <button 
-                        onClick={(e) => handleDeleteTechnician(e, tech.id)}
-                        className="bg-red-600 text-white py-2 px-2 sm:px-3 rounded text-xs sm:text-sm hover:bg-red-700"
-                      >
-                        Hapus
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Printer Brands Tab */}
-        {activeTab === 'printer-brands' && (
-          <div className="space-y-8">
-            <div className="bg-white rounded-lg shadow-md">
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-900">Manajemen Merk Printer</h2>
-                    <p className="text-gray-600 mt-1">Kelola merk dan model printer yang didukung</p>
+        {activeTab === 'brands' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-gray-900">Manajemen Merk Printer</h2>
+              <button
+                onClick={handleAddBrand}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Tambah Merk</span>
+              </button>
+            </div>
+
+            <div className="grid gap-6">
+              {printerBrands.map((brand) => (
+                <div key={brand.id} className="bg-white rounded-lg shadow p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">{brand.name}</h3>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleAddModel(brand.id)}
+                        className="text-blue-600 hover:text-blue-900"
+                        title="Tambah Model"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setEditingType('brand');
-                      setEditingBrand(null);
-                      setShowAddForm(true);
-                    }}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span>Tambah Merk</span>
-                  </button>
-                </div>
-              </div>
-              
-              <div className="p-6">
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {printerBrands.map((brand) => (
-                    <div key={brand.id} className="border rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <h3 className="text-lg font-semibold">{brand.name}</h3>
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={(e) => handleEditBrand(e, brand)}
-                            className="text-blue-600 hover:text-blue-800"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={(e) => handleDeleteBrand(e, brand.id)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {brand.models.map((model: any) => (
+                      <div key={model.id} className="border rounded-lg p-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="font-medium text-gray-900">{model.name}</div>
+                            <div className="text-sm text-gray-500 capitalize">{model.type}</div>
+                          </div>
                         </div>
                       </div>
-                      <p className="text-sm text-gray-600 mb-3">
-                        {brand.models?.length || 0} model tersedia
-                      </p>
-                      <div className="space-y-1 mb-3">
-                        {brand.models?.slice(0, 3).map((model: any) => (
-                          <div key={model.id} className="flex justify-between items-center text-xs bg-gray-100 px-2 py-1 rounded">
-                            <span>{model.name} ({model.type})</span>
-                            <div className="flex space-x-1">
-                              <button
-                                onClick={(e) => handleEditModel(e, brand, model)}
-                                className="text-blue-600 hover:text-blue-800"
-                              >
-                                <Edit className="h-3 w-3" />
-                              </button>
-                              <button
-                                onClick={(e) => handleDeleteModel(e, model.id)}
-                                className="text-red-600 hover:text-red-800"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                        {brand.models?.length > 3 && (
-                          <div className="text-xs text-gray-500">
-                            +{brand.models.length - 3} model lainnya
-                          </div>
-                        )}
-                      </div>
-                      <button
-                        onClick={(e) => handleAddModel(e, brand)}
-                        className="w-full bg-green-600 text-white py-1 px-2 rounded text-xs hover:bg-green-700 flex items-center justify-center space-x-1"
-                      >
-                        <Plus className="h-3 w-3" />
-                        <span>Tambah Model</span>
-                      </button>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ))}
             </div>
           </div>
         )}
 
         {/* Problem Categories Tab */}
-        {activeTab === 'problem-categories' && (
-          <div className="space-y-8">
-            <div className="bg-white rounded-lg shadow-md">
-              <div className="p-4 sm:p-6 border-b border-gray-200">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-900">Manajemen Kategori Masalah</h2>
-                    <p className="text-gray-600 mt-1">Kelola kategori dan jenis masalah printer</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setEditingType('category');
-                      setEditingCategory(null);
-                      setShowAddForm(true);
-                    }}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span>Tambah Kategori</span>
-                  </button>
-                </div>
-              </div>
-              
-              <div className="p-6">
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {problemCategories.map((category) => (
-                    <div key={category.id} className="border rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <h3 className="text-lg font-semibold">{category.name}</h3>
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={(e) => handleEditCategory(e, category)}
-                            className="text-blue-600 hover:text-blue-800"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={(e) => handleDeleteCategory(e, category.id)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-3">
-                        {category.problems?.length || 0} masalah terdaftar
-                      </p>
-                      <div className="space-y-1 mb-3">
-                        {category.problems?.slice(0, 3).map((problem: any) => (
-                          <div key={problem.id} className="flex justify-between items-center text-xs bg-gray-100 px-2 py-1 rounded">
-                            <span>{problem.name}</span>
-                            <div className="flex space-x-1">
-                              <button
-                                onClick={(e) => handleEditProblem(e, category, problem)}
-                                className="text-blue-600 hover:text-blue-800"
-                              >
-                                <Edit className="h-3 w-3" />
-                              </button>
-                              <button
-                                onClick={(e) => handleDeleteProblem(e, problem.id)}
-                                className="text-red-600 hover:text-red-800"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </button>
+        {activeTab === 'problems' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-gray-900">Manajemen Kategori Masalah</h2>
+            </div>
+
+            <div className="grid gap-6">
+              {problemCategories.map((category) => (
+                <div key={category.id} className="bg-white rounded-lg shadow p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">{category.name}</h3>
+                  <div className="grid gap-4">
+                    {category.problems.map((problem: any) => (
+                      <div key={problem.id} className="border rounded-lg p-4">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-900">{problem.name}</div>
+                            <div className="text-sm text-gray-600 mt-1">{problem.description}</div>
+                            <div className="flex space-x-4 mt-2 text-xs text-gray-500">
+                              <span>Waktu: {problem.estimatedTime}</span>
+                              <span>Biaya: {problem.estimatedCost}</span>
+                              <span className="capitalize">Tingkat: {problem.severity}</span>
                             </div>
                           </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Technicians Tab */}
+        {activeTab === 'technicians' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-gray-900">Manajemen Teknisi</h2>
+              <button
+                onClick={handleAddTechnician}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Tambah Teknisi</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {technicians.map((technician) => (
+                <div key={technician.id} className="bg-white rounded-lg shadow p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">{technician.name}</h3>
+                      <p className="text-sm text-gray-600">{technician.phone}</p>
+                      {technician.email && (
+                        <p className="text-sm text-gray-600">{technician.email}</p>
+                      )}
+                    </div>
+                    <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      technician.is_available ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    }`}>
+                      {technician.is_available ? 'Tersedia' : 'Sibuk'}
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">Spesialisasi:</span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {technician.specialization.map((spec: string, index: number) => (
+                          <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                            {spec}
+                          </span>
                         ))}
-                        {category.problems?.length > 3 && (
-                          <div className="text-xs text-gray-500">
-                            +{category.problems.length - 3} masalah lainnya
-                          </div>
+                      </div>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Pengalaman:</span>
+                      <span className="font-medium">{technician.experience} tahun</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Rating:</span>
+                      <span className="font-medium">{technician.rating}/5.0</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Booking Detail Modal */}
+      {showBookingDetail && selectedBooking && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Detail Booking #{selectedBooking.id}</h2>
+                <button
+                  onClick={() => setShowBookingDetail(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Customer Info */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Informasi Customer</h3>
+                  <div className="space-y-2">
+                    <div><span className="font-medium">Nama:</span> {selectedBooking.customer.name}</div>
+                    <div><span className="font-medium">HP:</span> {selectedBooking.customer.phone}</div>
+                    <div><span className="font-medium">Email:</span> {selectedBooking.customer.email}</div>
+                    <div><span className="font-medium">Alamat:</span> {selectedBooking.customer.address}</div>
+                  </div>
+                </div>
+
+                {/* Service Info */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Informasi Service</h3>
+                  <div className="space-y-2">
+                    <div><span className="font-medium">Printer:</span> {selectedBooking.printer.brand} {selectedBooking.printer.model}</div>
+                    <div><span className="font-medium">Kategori Masalah:</span> {selectedBooking.problem.category}</div>
+                    <div><span className="font-medium">Deskripsi:</span> {selectedBooking.problem.description}</div>
+                    <div><span className="font-medium">Jenis Service:</span> {selectedBooking.service.type}</div>
+                    <div><span className="font-medium">Tanggal:</span> {selectedBooking.service.date}</div>
+                    <div><span className="font-medium">Waktu:</span> {selectedBooking.service.time}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Timeline */}
+              <div className="mt-8">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Timeline Progress</h3>
+                <div className="space-y-4">
+                  {selectedBooking.timeline.map((step: any, index: number) => (
+                    <div key={index} className="flex items-start space-x-3">
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                        step.completed ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
+                      }`}>
+                        {step.completed ? <CheckCircle className="h-5 w-5" /> : <Clock className="h-5 w-5" />}
+                      </div>
+                      <div className="flex-1">
+                        <h4 className={`font-semibold ${step.completed ? 'text-gray-900' : 'text-gray-500'}`}>
+                          {step.title}
+                        </h4>
+                        <p className={`text-sm ${step.completed ? 'text-gray-600' : 'text-gray-400'}`}>
+                          {step.description}
+                        </p>
+                        {step.timestamp && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            {new Date(step.timestamp).toLocaleString('id-ID')}
+                          </p>
                         )}
                       </div>
-                      <button
-                        onClick={(e) => handleAddProblem(e, category)}
-                        className="w-full bg-green-600 text-white py-1 px-2 rounded text-xs hover:bg-green-700 flex items-center justify-center space-x-1"
-                      >
-                        <Plus className="h-3 w-3" />
-                        <span>Tambah Masalah</span>
-                      </button>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
           </div>
-        )}
-
-        {/* Settings Tab */}
-        {activeTab === 'settings' && (
-          <div className="space-y-8">
-            <div className="bg-white rounded-lg shadow-md">
-              <div className="p-6 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">Pengaturan Sistem</h2>
-                <p className="text-gray-600 mt-1">Kelola pengaturan aplikasi dan notifikasi</p>
-              </div>
-              
-              <div className="p-6 space-y-6">
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div className="border rounded-lg p-4">
-                    <h3 className="text-lg font-semibold mb-4">Notifikasi WhatsApp</h3>
-                    <div className="space-y-3">
-                      <label className="flex items-center">
-                        <input type="checkbox" className="mr-2" defaultChecked />
-                        <span>Notifikasi booking baru</span>
-                      </label>
-                      <label className="flex items-center">
-                        <input type="checkbox" className="mr-2" defaultChecked />
-                        <span>Update status service</span>
-                      </label>
-                      <div className="mt-4">
-                        <label className="block text-sm font-medium mb-2">Nomor WhatsApp Admin:</label>
-                        <input 
-                          type="text" 
-                          defaultValue="+62853-6814-8449"
-                          className="w-full px-3 py-2 border rounded-lg"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="border rounded-lg p-4">
-                    <h3 className="text-lg font-semibold mb-4">Pengaturan Umum</h3>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Nama Toko:</label>
-                        <input 
-                          type="text" 
-                          defaultValue="Barokah Printer"
-                          className="w-full px-3 py-2 border rounded-lg"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Email:</label>
-                        <input 
-                          type="email" 
-                          defaultValue="barokahprint22@gmail.com"
-                          className="w-full px-3 py-2 border rounded-lg"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Alamat:</label>
-                        <textarea 
-                          defaultValue="Jl. Depati Parbo No.rt 17, Pematang Sulur, Kec. Telanaipura, Kota Jambi"
-                          className="w-full px-3 py-2 border rounded-lg"
-                          rows={3}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border rounded-lg p-4">
-                  <h3 className="text-lg font-semibold mb-4">Backup & Restore</h3>
-                  <div className="flex space-x-4">
-                    <button 
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        Swal.fire({
-                          title: 'Info',
-                          text: 'Fitur backup data akan segera tersedia!',
-                          icon: 'info',
-                          confirmButtonColor: '#3b82f6'
-                        });
-                      }}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-                    >
-                      Backup Data
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        Swal.fire({
-                          title: 'Info',
-                          text: 'Fitur export laporan akan segera tersedia!',
-                          icon: 'info',
-                          confirmButtonColor: '#059669'
-                        });
-                      }}
-                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-                    >
-                      Export Laporan
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        Swal.fire({
-                          title: 'Info',
-                          text: 'Fitur import data akan segera tersedia!',
-                          icon: 'info',
-                          confirmButtonColor: '#d97706'
-                        });
-                      }}
-                      className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700"
-                    >
-                      Import Data
-                    </button>
-                  </div>
-                </div>
-
-                <button 
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    // Handle settings save logic here
-                    Swal.fire({
-                      title: 'Berhasil!',
-                      text: 'Pengaturan berhasil disimpan!',
-                      icon: 'success',
-                      timer: 2000,
-                      showConfirmButton: false
-                    });
-                  }}
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-medium"
-                >
-                  Simpan Pengaturan
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Reports Tab */}
-        {activeTab === 'reports' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mobile-fade-left">
-              <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Revenue Analysis</h3>
-                <div className="space-y-3 sm:space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600 text-sm sm:text-base">Total Revenue:</span>
-                    <span className="text-lg sm:text-2xl font-bold text-green-600">
-                      {formatCurrency(stats.totalRevenue)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600 text-sm sm:text-base">Bulan Ini:</span>
-                    <span className="text-base sm:text-xl font-semibold text-blue-600">
-                      {formatCurrency(stats.thisMonthRevenue)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600 text-sm sm:text-base">Rata-rata per Service:</span>
-                    <span className="font-medium text-sm sm:text-base">
-                      {formatCurrency(stats.completedBookings > 0 ? stats.totalRevenue / stats.completedBookings : 0)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Service Statistics</h3>
-                <div className="space-y-3 sm:space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600 text-sm sm:text-base">Completion Rate:</span>
-                    <span className="text-base sm:text-xl font-semibold text-green-600">
-                      {stats.totalBookings > 0 ? Math.round((stats.completedBookings / stats.totalBookings) * 100) : 0}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600 text-sm sm:text-base">Average Rating:</span>
-                    <span className="font-medium text-sm sm:text-base">4.8/5.0</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600 text-sm sm:text-base">Response Time:</span>
-                    <span className="font-medium text-sm sm:text-base">&lt; 2 jam</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Real-time Transaction Report */}
-            <div className="bg-white rounded-lg shadow-md">
-              <div className="p-4 sm:p-6 border-b border-gray-200">
-                <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Laporan Transaksi Real-time</h3>
-                <p className="text-gray-600 mt-1">Data transaksi terbaru dan analisis periode</p>
-              </div>
-              
-              <div className="p-4 sm:p-6">
-                <div className="space-y-4">
-                  <div className="text-center text-gray-500">
-                    <BarChart3 className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-                    <p>Laporan transaksi akan ditampilkan di sini</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Add/Edit Technician Modal */}
-        {showTechnicianModal && (
-          <TechnicianFormModal
-            technician={editingTechnician}
-            onSave={handleAddTechnician}
-            onClose={() => {
-              setShowTechnicianModal(false);
-              setEditingTechnician(null);
-            }}
-          />
-        )}
-
-        {/* Schedule View Modal */}
-        {showScheduleModal && selectedTechnician && (
-          <ScheduleModal
-            technician={selectedTechnician}
-            onClose={() => {
-              setShowScheduleModal(false);
-              setSelectedTechnician(null);
-            }}
-          />
-        )}
-
-        {/* Add/Edit Brand/Category Modal */}
-        {showAddForm && (
-          <AddFormModal
-            type={editingType}
-            item={editingBrand || editingCategory}
-            onSave={(data) => {
-              if (editingType === 'brand') {
-                handleAddPrinterBrand(data.name);
-              } else if (editingType === 'category') {
-                handleAddProblemCategory(data.name, data.icon);
-              }
-            }}
-            onClose={() => {
-              setShowAddForm(false);
-              setEditingType(null);
-              setEditingBrand(null);
-              setEditingCategory(null);
-            }}
-          />
-        )}
-
-        {/* Add/Edit Model Modal */}
-        {showModelModal && (
-          <ModelFormModal
-            model={editingModel}
-            brand={selectedBrand}
-            onSave={handleSaveModel}
-            onClose={() => {
-              setShowModelModal(false);
-              setEditingModel(null);
-              setSelectedBrand(null);
-            }}
-          />
-        )}
-
-        {/* Add/Edit Problem Modal */}
-        {showProblemModal && (
-          <ProblemFormModal
-            problem={editingProblem}
-            category={selectedCategory}
-            onSave={handleSaveProblem}
-            onClose={() => {
-              setShowProblemModal(false);
-              setEditingProblem(null);
-              setSelectedCategory(null);
-            }}
-          />
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };
