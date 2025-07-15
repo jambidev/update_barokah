@@ -37,6 +37,10 @@ import {
   updateProblem,
   deleteProblemCategory,
   deleteProblem,
+  fetchGalleryImages,
+  addGalleryImage,
+  updateGalleryImage,
+  deleteGalleryImage,
   addTechnician,
   updateTechnician,
   deleteTechnician,
@@ -59,6 +63,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onLogout })
   const [printerBrands, setPrinterBrands] = useState<any[]>([]);
   const [problemCategories, setProblemCategories] = useState<any[]>([]);
   const [technicians, setTechnicians] = useState<any[]>([]);
+  const [galleryImages, setGalleryImages] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -153,7 +158,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onLogout })
         loadBookings(),
         loadPrinterBrands(),
         loadProblemCategories(),
-        loadTechnicians()
+        loadTechnicians(),
+        loadGalleryImages()
       ]);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -196,6 +202,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onLogout })
       setTechnicians(data);
     } catch (error) {
       console.error('Error loading technicians:', error);
+    }
+  };
+
+  const loadGalleryImages = async () => {
+    try {
+      const data = await fetchGalleryImages();
+      setGalleryImages(data);
+    } catch (error) {
+      console.error('Error loading gallery images:', error);
     }
   };
 
@@ -432,6 +447,300 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onLogout })
     }
   };
 
+  const handleAddProblemCategory = async () => {
+    try {
+      const { value: formValues } = await Swal.fire({
+        title: 'Tambah Kategori Masalah',
+        html: `
+          <input id="category-name" class="swal2-input" placeholder="Nama Kategori" />
+          <input id="category-icon" class="swal2-input" placeholder="Icon (contoh: Printer)" />
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Tambah',
+        cancelButtonText: 'Batal',
+        preConfirm: () => {
+          const name = (document.getElementById('category-name') as HTMLInputElement).value;
+          const icon = (document.getElementById('category-icon') as HTMLInputElement).value;
+          if (!name || !icon) {
+            Swal.showValidationMessage('Semua field harus diisi!');
+            return false;
+          }
+          return { name, icon };
+        }
+      });
+
+      if (formValues) {
+        await addProblemCategory(formValues.name, formValues.icon);
+        showSuccessAlert('Kategori masalah berhasil ditambahkan');
+        loadProblemCategories();
+      }
+    } catch (error) {
+      console.error('Error adding problem category:', error);
+      showErrorAlert('Gagal menambahkan kategori masalah');
+    }
+  };
+
+  const handleEditProblemCategory = async (category: any) => {
+    try {
+      const { value: formValues } = await Swal.fire({
+        title: 'Edit Kategori Masalah',
+        html: `
+          <input id="category-name" class="swal2-input" placeholder="Nama Kategori" value="${category.name}" />
+          <input id="category-icon" class="swal2-input" placeholder="Icon" value="${category.icon}" />
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Update',
+        cancelButtonText: 'Batal',
+        preConfirm: () => {
+          const name = (document.getElementById('category-name') as HTMLInputElement).value;
+          const icon = (document.getElementById('category-icon') as HTMLInputElement).value;
+          if (!name || !icon) {
+            Swal.showValidationMessage('Semua field harus diisi!');
+            return false;
+          }
+          return { name, icon };
+        }
+      });
+
+      if (formValues) {
+        await updateProblemCategory(category.id, formValues.name, formValues.icon);
+        showSuccessAlert('Kategori masalah berhasil diupdate');
+        loadProblemCategories();
+      }
+    } catch (error) {
+      console.error('Error updating problem category:', error);
+      showErrorAlert('Gagal mengupdate kategori masalah');
+    }
+  };
+
+  const handleDeleteProblemCategory = async (id: string, name: string) => {
+    try {
+      const result = await showDeleteConfirm(`kategori "${name}"`);
+      if (result.isConfirmed) {
+        await deleteProblemCategory(id);
+        showSuccessAlert('Kategori masalah berhasil dihapus');
+        loadProblemCategories();
+      }
+    } catch (error) {
+      console.error('Error deleting problem category:', error);
+      showErrorAlert('Gagal menghapus kategori masalah');
+    }
+  };
+
+  const handleAddProblem = async (categoryId: string) => {
+    try {
+      const { value: formValues } = await Swal.fire({
+        title: 'Tambah Masalah',
+        html: `
+          <input id="problem-name" class="swal2-input" placeholder="Nama Masalah" />
+          <textarea id="problem-description" class="swal2-textarea" placeholder="Deskripsi Masalah"></textarea>
+          <select id="problem-severity" class="swal2-input">
+            <option value="">Pilih Tingkat Kesulitan</option>
+            <option value="low">Ringan</option>
+            <option value="medium">Sedang</option>
+            <option value="high">Berat</option>
+          </select>
+          <input id="problem-time" class="swal2-input" placeholder="Estimasi Waktu (contoh: 1-2 jam)" />
+          <input id="problem-cost" class="swal2-input" placeholder="Estimasi Biaya (contoh: Rp 50.000 - 100.000)" />
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Tambah',
+        cancelButtonText: 'Batal',
+        preConfirm: () => {
+          const name = (document.getElementById('problem-name') as HTMLInputElement).value;
+          const description = (document.getElementById('problem-description') as HTMLTextAreaElement).value;
+          const severity = (document.getElementById('problem-severity') as HTMLSelectElement).value;
+          const estimatedTime = (document.getElementById('problem-time') as HTMLInputElement).value;
+          const estimatedCost = (document.getElementById('problem-cost') as HTMLInputElement).value;
+          
+          if (!name || !description || !severity || !estimatedTime || !estimatedCost) {
+            Swal.showValidationMessage('Semua field harus diisi!');
+            return false;
+          }
+          return { name, description, severity, estimatedTime, estimatedCost };
+        }
+      });
+
+      if (formValues) {
+        await addProblem(categoryId, formValues.name, formValues.description, formValues.severity, formValues.estimatedTime, formValues.estimatedCost);
+        showSuccessAlert('Masalah berhasil ditambahkan');
+        loadProblemCategories();
+      }
+    } catch (error) {
+      console.error('Error adding problem:', error);
+      showErrorAlert('Gagal menambahkan masalah');
+    }
+  };
+
+  const handleEditProblem = async (problem: any) => {
+    try {
+      const { value: formValues } = await Swal.fire({
+        title: 'Edit Masalah',
+        html: `
+          <input id="problem-name" class="swal2-input" placeholder="Nama Masalah" value="${problem.name}" />
+          <textarea id="problem-description" class="swal2-textarea" placeholder="Deskripsi Masalah">${problem.description}</textarea>
+          <select id="problem-severity" class="swal2-input">
+            <option value="low" ${problem.severity === 'low' ? 'selected' : ''}>Ringan</option>
+            <option value="medium" ${problem.severity === 'medium' ? 'selected' : ''}>Sedang</option>
+            <option value="high" ${problem.severity === 'high' ? 'selected' : ''}>Berat</option>
+          </select>
+          <input id="problem-time" class="swal2-input" placeholder="Estimasi Waktu" value="${problem.estimatedTime}" />
+          <input id="problem-cost" class="swal2-input" placeholder="Estimasi Biaya" value="${problem.estimatedCost}" />
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Update',
+        cancelButtonText: 'Batal',
+        preConfirm: () => {
+          const name = (document.getElementById('problem-name') as HTMLInputElement).value;
+          const description = (document.getElementById('problem-description') as HTMLTextAreaElement).value;
+          const severity = (document.getElementById('problem-severity') as HTMLSelectElement).value;
+          const estimatedTime = (document.getElementById('problem-time') as HTMLInputElement).value;
+          const estimatedCost = (document.getElementById('problem-cost') as HTMLInputElement).value;
+          
+          if (!name || !description || !severity || !estimatedTime || !estimatedCost) {
+            Swal.showValidationMessage('Semua field harus diisi!');
+            return false;
+          }
+          return { name, description, severity, estimatedTime, estimatedCost };
+        }
+      });
+
+      if (formValues) {
+        await updateProblem(problem.id, formValues.name, formValues.description, formValues.severity, formValues.estimatedTime, formValues.estimatedCost);
+        showSuccessAlert('Masalah berhasil diupdate');
+        loadProblemCategories();
+      }
+    } catch (error) {
+      console.error('Error updating problem:', error);
+      showErrorAlert('Gagal mengupdate masalah');
+    }
+  };
+
+  const handleDeleteProblem = async (id: string, name: string) => {
+    try {
+      const result = await showDeleteConfirm(`masalah "${name}"`);
+      if (result.isConfirmed) {
+        await deleteProblem(id);
+        showSuccessAlert('Masalah berhasil dihapus');
+        loadProblemCategories();
+      }
+    } catch (error) {
+      console.error('Error deleting problem:', error);
+      showErrorAlert('Gagal menghapus masalah');
+    }
+  };
+
+  const handleAddGalleryImage = async () => {
+    try {
+      const { value: formValues } = await Swal.fire({
+        title: 'Tambah Gambar Gallery',
+        html: `
+          <input id="image-title" class="swal2-input" placeholder="Judul Gambar" />
+          <input id="image-alt" class="swal2-input" placeholder="Alt Text" />
+          <input id="image-url" class="swal2-input" placeholder="URL Gambar" />
+          <select id="image-category" class="swal2-input">
+            <option value="">Pilih Kategori</option>
+            <option value="service">Service</option>
+            <option value="workshop">Workshop</option>
+            <option value="team">Team</option>
+            <option value="products">Products</option>
+            <option value="store">Store</option>
+            <option value="equipment">Equipment</option>
+            <option value="parts">Parts</option>
+          </select>
+          <input id="image-order" class="swal2-input" type="number" placeholder="Urutan (opsional)" />
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Tambah',
+        cancelButtonText: 'Batal',
+        preConfirm: () => {
+          const title = (document.getElementById('image-title') as HTMLInputElement).value;
+          const alt_text = (document.getElementById('image-alt') as HTMLInputElement).value;
+          const image_url = (document.getElementById('image-url') as HTMLInputElement).value;
+          const category = (document.getElementById('image-category') as HTMLSelectElement).value;
+          const sort_order = parseInt((document.getElementById('image-order') as HTMLInputElement).value) || 0;
+          
+          if (!title || !alt_text || !image_url || !category) {
+            Swal.showValidationMessage('Semua field kecuali urutan harus diisi!');
+            return false;
+          }
+          return { title, alt_text, image_url, category, sort_order };
+        }
+      });
+
+      if (formValues) {
+        await addGalleryImage(formValues);
+        showSuccessAlert('Gambar berhasil ditambahkan ke gallery');
+        loadGalleryImages();
+      }
+    } catch (error) {
+      console.error('Error adding gallery image:', error);
+      showErrorAlert('Gagal menambahkan gambar');
+    }
+  };
+
+  const handleEditGalleryImage = async (image: any) => {
+    try {
+      const { value: formValues } = await Swal.fire({
+        title: 'Edit Gambar Gallery',
+        html: `
+          <input id="image-title" class="swal2-input" placeholder="Judul Gambar" value="${image.title}" />
+          <input id="image-alt" class="swal2-input" placeholder="Alt Text" value="${image.alt_text}" />
+          <input id="image-url" class="swal2-input" placeholder="URL Gambar" value="${image.image_url}" />
+          <select id="image-category" class="swal2-input">
+            <option value="service" ${image.category === 'service' ? 'selected' : ''}>Service</option>
+            <option value="workshop" ${image.category === 'workshop' ? 'selected' : ''}>Workshop</option>
+            <option value="team" ${image.category === 'team' ? 'selected' : ''}>Team</option>
+            <option value="products" ${image.category === 'products' ? 'selected' : ''}>Products</option>
+            <option value="store" ${image.category === 'store' ? 'selected' : ''}>Store</option>
+            <option value="equipment" ${image.category === 'equipment' ? 'selected' : ''}>Equipment</option>
+            <option value="parts" ${image.category === 'parts' ? 'selected' : ''}>Parts</option>
+          </select>
+          <input id="image-order" class="swal2-input" type="number" placeholder="Urutan" value="${image.sort_order}" />
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Update',
+        cancelButtonText: 'Batal',
+        preConfirm: () => {
+          const title = (document.getElementById('image-title') as HTMLInputElement).value;
+          const alt_text = (document.getElementById('image-alt') as HTMLInputElement).value;
+          const image_url = (document.getElementById('image-url') as HTMLInputElement).value;
+          const category = (document.getElementById('image-category') as HTMLSelectElement).value;
+          const sort_order = parseInt((document.getElementById('image-order') as HTMLInputElement).value) || 0;
+          
+          if (!title || !alt_text || !image_url || !category) {
+            Swal.showValidationMessage('Semua field harus diisi!');
+            return false;
+          }
+          return { title, alt_text, image_url, category, sort_order };
+        }
+      });
+
+      if (formValues) {
+        await updateGalleryImage(image.id, formValues);
+        showSuccessAlert('Gambar berhasil diupdate');
+        loadGalleryImages();
+      }
+    } catch (error) {
+      console.error('Error updating gallery image:', error);
+      showErrorAlert('Gagal mengupdate gambar');
+    }
+  };
+
+  const handleDeleteGalleryImage = async (id: string, title: string) => {
+    try {
+      const result = await showDeleteConfirm(`gambar "${title}"`);
+      if (result.isConfirmed) {
+        await deleteGalleryImage(id);
+        showSuccessAlert('Gambar berhasil dihapus');
+        loadGalleryImages();
+      }
+    } catch (error) {
+      console.error('Error deleting gallery image:', error);
+      showErrorAlert('Gagal menghapus gambar');
+    }
+  };
+
   const handleViewBookingDetail = async (bookingId: string) => {
     try {
       const booking = await getBookingById(bookingId);
@@ -501,7 +810,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onLogout })
               { id: 'bookings', name: 'Booking Management', icon: Calendar },
               { id: 'brands', name: 'Printer Brands', icon: Printer },
               { id: 'problems', name: 'Problem Categories', icon: Wrench },
-              { id: 'technicians', name: 'Technicians', icon: Users }
+              { id: 'technicians', name: 'Technicians', icon: Users },
+              { id: 'gallery', name: 'Gallery Management', icon: Settings }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -858,6 +1168,74 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onLogout })
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Gallery Tab */}
+        {activeTab === 'gallery' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-gray-900">Manajemen Gallery</h2>
+              <button
+                onClick={handleAddGalleryImage}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Tambah Gambar</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {galleryImages.map((image) => (
+                <div key={image.id} className="bg-white rounded-lg shadow overflow-hidden">
+                  <div className="aspect-square overflow-hidden">
+                    <img
+                      src={image.image_url}
+                      alt={image.alt_text}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="p-4">
+                    <h3 className="font-semibold text-gray-900 mb-1 truncate">{image.title}</h3>
+                    <p className="text-sm text-gray-600 mb-2 truncate">{image.alt_text}</p>
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full capitalize">
+                        {image.category}
+                      </span>
+                      <span className="text-xs text-gray-500">#{image.sort_order}</span>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleEditGalleryImage(image)}
+                        className="flex-1 bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 transition-colors flex items-center justify-center space-x-1"
+                      >
+                        <Edit className="h-3 w-3" />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteGalleryImage(image.id, image.title)}
+                        className="flex-1 bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors flex items-center justify-center space-x-1"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        <span>Hapus</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {galleryImages.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-gray-500 text-lg">Belum ada gambar di gallery</p>
+                <button
+                  onClick={handleAddGalleryImage}
+                  className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Tambah Gambar Pertama
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

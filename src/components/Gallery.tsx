@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, ChevronLeft, ChevronRight, ZoomIn } from 'lucide-react';
+import { fetchGalleryImages } from '../utils/supabaseData';
+import { supabase } from '../utils/supabase';
 
 interface GalleryImage {
   id: number;
@@ -13,150 +15,54 @@ const Gallery: React.FC = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [filter, setFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
+  const [galleryImages, setGalleryImages] = useState<any[]>([]);
 
-  // Gallery images data
-  const galleryImages: GalleryImage[] = [
-    {
-      id: 1,
-      src: "https://down-id.img.susercontent.com/file/id-11134207-7r98z-llk42fcyg5jm03.webp",
-      alt: "Barokah Printer Service 1",
-      category: "service"
-    },
-    {
-      id: 2,
-      src: "https://down-id.img.susercontent.com/file/id-11134207-7r98o-lkyobliz8zunf8.webp",
-      alt: "Barokah Printer Service 2",
-      category: "service"
-    },
-    {
-      id: 3,
-      src: "https://down-id.img.susercontent.com/file/id-11134207-7r990-lsmdu0o0sa4m09@resize_w900_nl.webp",
-      alt: "Barokah Printer Service 3",
-      category: "service"
-    },
-    {
-      id: 4,
-      src: "https://down-id.img.susercontent.com/file/id-11134207-7qukz-lkhwh06q0s5wa4@resize_w900_nl.webp",
-      alt: "Barokah Printer Service 4",
-      category: "service"
-    },
-    {
-      id: 5,
-      src: "https://down-id.img.susercontent.com/file/id-11134207-7rbka-macqpeuxfbxacb@resize_w900_nl.webp",
-      alt: "Barokah Printer Service 5",
-      category: "service"
-    },
-    {
-      id: 6,
-      src: "https://down-id.img.susercontent.com/file/id-11134207-7r98q-lm8h1m3sb19b00@resize_w900_nl.webp",
-      alt: "Barokah Printer Service 6",
-      category: "service"
-    },
-    {
-      id: 7,
-      src: "https://down-id.img.susercontent.com/file/id-11134207-7r98u-lw57ldwk417id2@resize_w900_nl.webp",
-      alt: "Barokah Printer Workshop 1",
-      category: "workshop"
-    },
-    {
-      id: 8,
-      src: "https://down-id.img.susercontent.com/file/id-11134207-7r98w-lm4g11dct95871@resize_w900_nl.webp",
-      alt: "Barokah Printer Workshop 2",
-      category: "workshop"
-    },
-    {
-      id: 9,
-      src: "https://down-id.img.susercontent.com/file/id-11134207-7qukw-lhloee9fzpzvde@resize_w900_nl.webp",
-      alt: "Barokah Printer Workshop 3",
-      category: "workshop"
-    },
-    {
-      id: 10,
-      src: "https://down-id.img.susercontent.com/file/id-11134207-7qul3-ljl0nd6x6t3s8b@resize_w900_nl.webp",
-      alt: "Barokah Printer Team 1",
-      category: "team"
-    },
-    {
-      id: 11,
-      src: "https://down-id.img.susercontent.com/file/id-11134207-7r990-lm4hcsmsyhwf5b@resize_w900_nl.webp",
-      alt: "Barokah Printer Team 2",
-      category: "team"
-    },
-    {
-      id: 12,
-      src: "https://down-id.img.susercontent.com/file/id-11134207-7r98s-lm4hcsmsx3bz25@resize_w900_nl.webp",
-      alt: "Barokah Printer Products 1",
-      category: "products"
-    },
-    {
-      id: 13,
-      src: "https://down-id.img.susercontent.com/file/id-11134207-7qukx-lkhwh06q26qc72@resize_w900_nl.webp",
-      alt: "Barokah Printer Products 2",
-      category: "products"
-    },
-    {
-      id: 14,
-      src: "https://down-id.img.susercontent.com/file/id-11134207-7r990-lsmdu0o0sa4m09@resize_w900_nl.webp",
-      alt: "Barokah Printer Products 3",
-      category: "products"
-    },
-    {
-      id: 15,
-      src: "https://down-id.img.susercontent.com/file/id-11134207-7rase-m3ehhb64cac841.webp",
-      alt: "Barokah Printer Store 1",
-      category: "store"
-    },
-    {
-      id: 16,
-      src: "https://down-id.img.susercontent.com/file/id-11134207-7r992-lsz9x6c45v99f8@resize_w900_nl.webp",
-      alt: "Barokah Printer Store 2",
-      category: "store"
-    },
-    {
-      id: 17,
-      src: "https://down-id.img.susercontent.com/file/id-11134207-7r98w-lr70q8693ia16f@resize_w900_nl.webp",
-      alt: "Barokah Printer Store 3",
-      category: "store"
-    },
-    {
-      id: 18,
-      src: "https://down-id.img.susercontent.com/file/id-11134207-7rbk8-mai4w85px5wkba@resize_w900_nl.webp",
-      alt: "Barokah Printer Equipment 1",
-      category: "equipment"
-    },
-    {
-      id: 19,
-      src: "https://down-id.img.susercontent.com/file/id-11134207-7rash-m3ivhx7nf34g51.webp",
-      alt: "Barokah Printer Equipment 2",
-      category: "equipment"
-    },
-    {
-      id: 20,
-      src: "https://down-id.img.susercontent.com/file/id-11134207-7r990-llblt22h7xwpa5",
-      alt: "Barokah Printer Parts 1",
-      category: "parts"
-    }
-  ];
+  // Load gallery images from database
+  useEffect(() => {
+    const loadGalleryImages = async () => {
+      try {
+        const images = await fetchGalleryImages();
+        setGalleryImages(images);
+      } catch (error) {
+        console.error('Error loading gallery images:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadGalleryImages();
+
+    // Setup realtime subscription for gallery updates
+    const galleryChannel = supabase
+      .channel('gallery-changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'gallery_images'
+      }, () => {
+        loadGalleryImages();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(galleryChannel);
+    };
+  }, []);
 
   const categories = [
     { id: 'all', name: 'Semua', count: galleryImages.length },
-    { id: 'service', name: 'Alat', count: galleryImages.filter(img => img.category === 'service').length },
-    { id: 'workshop', name: 'Tambahan', count: galleryImages.filter(img => img.category === 'workshop').length },
-    { id: 'team', name: 'Komponen', count: galleryImages.filter(img => img.category === 'team').length },
-    { id: 'products', name: 'Spare Part', count: galleryImages.filter(img => img.category === 'products').length },
-    { id: 'store', name: 'Printer', count: galleryImages.filter(img => img.category === 'store').length },
-    { id: 'equipment', name: 'Peralatan', count: galleryImages.filter(img => img.category === 'equipment').length },
-    { id: 'parts', name: 'Brother', count: galleryImages.filter(img => img.category === 'parts').length }
+    { id: 'service', name: 'Service', count: galleryImages.filter(img => img.category === 'service').length },
+    { id: 'workshop', name: 'Workshop', count: galleryImages.filter(img => img.category === 'workshop').length },
+    { id: 'team', name: 'Team', count: galleryImages.filter(img => img.category === 'team').length },
+    { id: 'products', name: 'Products', count: galleryImages.filter(img => img.category === 'products').length },
+    { id: 'store', name: 'Store', count: galleryImages.filter(img => img.category === 'store').length },
+    { id: 'equipment', name: 'Equipment', count: galleryImages.filter(img => img.category === 'equipment').length },
+    { id: 'parts', name: 'Parts', count: galleryImages.filter(img => img.category === 'parts').length }
   ];
 
   const filteredImages = filter === 'all' 
     ? galleryImages 
     : galleryImages.filter(img => img.category === filter);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 1000);
-    return () => clearTimeout(timer);
-  }, []);
 
   const openModal = (image: GalleryImage, index: number) => {
     setSelectedImage(image);
@@ -259,8 +165,8 @@ const Gallery: React.FC = () => {
             >
               <div className="aspect-square overflow-hidden">
                 <img
-                  src={image.src}
-                  alt={image.alt}
+                  src={image.image_url}
+                  alt={image.alt_text}
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                   loading="lazy"
                 />
@@ -269,7 +175,7 @@ const Gallery: React.FC = () => {
                 <ZoomIn className="text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300 h-8 w-8" />
               </div>
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-4 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-                <p className="text-white text-sm font-medium">{image.alt}</p>
+                <p className="text-white text-sm font-medium">{image.title}</p>
               </div>
             </div>
           ))}
@@ -316,12 +222,12 @@ const Gallery: React.FC = () => {
             {/* Image */}
             <div className="relative">
               <img
-                src={selectedImage.src}
-                alt={selectedImage.alt}
+                src={selectedImage.image_url}
+                alt={selectedImage.alt_text}
                 className="max-w-full max-h-[70vh] sm:max-h-[80vh] object-contain mx-auto rounded-lg"
               />
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-3 sm:p-6">
-                <h3 className="text-white text-base sm:text-xl font-semibold">{selectedImage.alt}</h3>
+                <h3 className="text-white text-base sm:text-xl font-semibold">{selectedImage.title}</h3>
                 <p className="text-gray-300 text-xs sm:text-sm mt-1">
                   {currentIndex + 1} dari {filteredImages.length}
                 </p>

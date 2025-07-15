@@ -266,6 +266,79 @@ export const deleteProblemCategory = async (id: string) => {
   }
 };
 
+// Gallery management functions
+export const fetchGalleryImages = async () => {
+  try {
+    const { data: images, error } = await supabase
+      .from('gallery_images')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+
+    if (error) throw error;
+    return images || [];
+  } catch (error) {
+    console.error('Error fetching gallery images:', error);
+    return [];
+  }
+};
+
+export const addGalleryImage = async (data: {
+  title: string;
+  alt_text: string;
+  image_url: string;
+  category: string;
+  sort_order?: number;
+}) => {
+  try {
+    const { error } = await supabase
+      .from('gallery_images')
+      .insert(data);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error adding gallery image:', error);
+    throw error;
+  }
+};
+
+export const updateGalleryImage = async (id: string, data: {
+  title?: string;
+  alt_text?: string;
+  image_url?: string;
+  category?: string;
+  sort_order?: number;
+}) => {
+  try {
+    const { error } = await supabase
+      .from('gallery_images')
+      .update(data)
+      .eq('id', id);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error updating gallery image:', error);
+    throw error;
+  }
+};
+
+export const deleteGalleryImage = async (id: string) => {
+  try {
+    const { error } = await supabase
+      .from('gallery_images')
+      .update({ is_active: false })
+      .eq('id', id);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting gallery image:', error);
+    throw error;
+  }
+};
+
 // Add new technician
 export const addTechnician = async (data: {
   name: string;
